@@ -35,30 +35,40 @@ Google OAuth · Next.js 16.3 App Router · zod v4 · Vitest — everything else 
   Phase 1's `CLAUDE.md`).
 - `pnpm typecheck && pnpm lint && pnpm build` must pass before every commit that touches app code.
 
-## Prerequisites (human — a subagent cannot do these)
+## Prerequisites — DONE (provisioned via `neon` CLI, 2026-09-03)
 
-Before Task 1, you need:
+The below was originally written assuming a Google Cloud OAuth client and a `createNeonAuth`
+config with explicit client/secret keys — neither turned out to be necessary. Real findings from
+the live `neon neon-auth` CLI, kept here so Task 3 doesn't repeat the same wrong assumptions:
 
-1. **A Neon project** with a Postgres database — from the Neon console or `neon projects create`.
-   Get its pooled connection string as `DATABASE_URL`.
-2. **Neon Auth enabled** on that project — get `NEON_AUTH_BASE_URL` and generate a
-   `NEON_AUTH_COOKIE_SECRET` (a long random string; `openssl rand -base64 32` works).
-3. **A Google Cloud OAuth 2.0 Client ID** (Web application type) — get `GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`. Authorized redirect URI will be
-   `<your-domain>/api/auth/callback/google` (confirm the exact path against whatever Neon
-   Auth/Better Auth version you install — see Task 3).
-4. **Request Google's OAuth consent screen publication now**, in parallel with everything else —
-   this has a multi-day review lead time (spec §11) and blocks nothing except testing the real
-   sign-up flow end-to-end.
-5. **Pick `ADMIN_EMAIL`** — the Google account that becomes the first admin (spec §6).
-6. Add all of the above to `.env.local` (gitignored) as: `DATABASE_URL`, `NEON_AUTH_BASE_URL`,
-   `NEON_AUTH_COOKIE_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAIL`,
-   `INVITE_CODE_SECRET` (a second random string, HMAC-signs the invite-code cookie — Task 4).
+1. **Neon project created**: `sodales-academy` (id `weathered-cherry-68306158`), region
+   `aws-ap-southeast-1` (Singapore — matches Vercel `sin1` per `docs/00-platform.md` §9), Postgres
+   18. Pooled connection string is in `.env.local` as `DATABASE_URL`.
+2. **Neon Auth enabled** on the `main` branch (`neon neon-auth enable`). Its `base_url` (in
+   `.env.local` as `NEON_AUTH_BASE_URL`) and `jwks_url` are the two endpoints the app needs —
+   there is **no separate cookie secret to generate**; Neon Auth manages its own session/signing
+   keys server-side. Drop `NEON_AUTH_COOKIE_SECRET` from Task 3's env checks entirely.
+3. **Google OAuth needs no Google Cloud project at all** — `neon neon-auth oauth-provider list`
+   showed Google already configured as `{"id": "google", "type": "shared"}`: Neon's own shared
+   OAuth app, enabled by default the moment Neon Auth turns on. This removes the multi-day consent-
+   screen dependency the original spec/plan flagged as a risk. (A dedicated Google Cloud client for
+   a branded consent screen is still possible later via `neon neon-auth oauth-provider add
+   --provider-id google --oauth-client-id ... --oauth-client-secret ...`, but is not needed to
+   ship this plan.)
+4. **Email/password sign-up disabled**: `neon neon-auth config email-password update --enabled
+   false` — Google is now the only way to authenticate, matching deviation D-2.
+5. **Trusted domains registered**: `localhost` (via `neon neon-auth domain allow-localhost
+   enable`) and `https://sodales.vercel.app` (via `neon neon-auth domain add`).
+6. **`INVITE_CODE_SECRET`** generated (`openssl rand -base64 32`) and in `.env.local`.
+7. **`ADMIN_EMAIL`** — still needs a human answer (which Google account becomes the first admin);
+   not yet in `.env.local`. Task 1 doesn't need it; Task 7/9 do.
 
-If you don't have console/CLI access to create these yourself, the `wizard` skill can generate an
-interactive script that walks a human through the parts that need a browser (Neon console, Google
-Cloud console) — this plan assumes the values already exist in `.env.local` by the time Task 1
-starts.
+**Still needed before Task 3, and only discoverable by installing the package:** the real
+`@neondatabase/auth` npm package (`0.5.0-beta` as of this writing, depends on `better-auth@1.6.23`
++ `jose` + `@supabase/auth-js` + `@neondatabase/auth-ui`) ships its own `neon-auth-codemod` CLI
+bin. Run that codemod (or read the package's own README/`dist/index.d.ts`) as the actual source
+of truth for `createNeonAuth`'s config shape and the client-side hook-up — Task 3's code sample is
+a best-effort sketch based on the CLI's `base_url`/`jwks_url` output, not a verified integration.
 
 ---
 
@@ -325,33 +335,31 @@ git commit -m "feat: add Drizzle schema for courses, users, enrollment, and invi
 - Create: `src/lib/auth/server.ts`, `src/app/api/auth/[...path]/route.ts`
 
 **Interfaces:**
-- Consumes: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `GOOGLE_CLIENT_ID`,
-  `GOOGLE_CLIENT_SECRET` env vars (Prerequisites)
+- Consumes: `NEON_AUTH_BASE_URL` env var (Prerequisites — `NEON_AUTH_COOKIE_SECRET` and
+  `GOOGLE_CLIENT_ID`/`SECRET` are NOT needed; see the Prerequisites section's real findings)
 - Produces: `auth` — the Neon Auth instance, consumed by `src/lib/session.ts` (Task 6) and the
   invite-code gate (Task 4)
 
-- [ ] **Step 1: Verify the current Neon Auth package and API before writing code**
+- [ ] **Step 1: Install the real package and run its own codemod**
 
-`docs/00-platform.md` §6 and `docs/02-academy.md` §10 (both written before this repo existed
-standalone) specify `@neondatabase/auth`'s `createNeonAuth`, and the Phase 1 spec flags Neon Auth
-as Beta software whose API should be re-verified at wiring time. Before writing `server.ts`:
-
-```bash
-pnpm view @neondatabase/auth versions --json
-```
-
-Check that package's own README/type definitions for the current `createNeonAuth` config shape
-(provider list format, cookie config, base URL option name) — the fields below are this plan's
-best-effort based on the existing SDDs and Better-Auth-style conventions, not a verified-today
-API surface.
-
-- [ ] **Step 2: Install and configure the server instance**
+The Prerequisites section already confirmed `@neondatabase/auth@0.5.0-beta` exists on npm, wraps
+`better-auth@1.6.23` directly, and ships a `neon-auth-codemod` CLI bin — that codemod is the
+authoritative source for how this version wants to be wired into a Next.js App Router project,
+not the snippet below (which is an unverified best-effort sketch based only on the CLI's
+`base_url`/`jwks_url` output).
 
 ```bash
 pnpm add @neondatabase/auth
+pnpm exec neon-auth-codemod
 ```
 
-Create `src/lib/auth/server.ts`:
+Read what the codemod actually generates/modifies before proceeding — if it scaffolds
+`src/lib/auth/server.ts` (or an equivalent) itself, use its output directly in place of Step 2
+below rather than layering this plan's sketch on top of it. If no such codemod runs cleanly or it
+targets a different framework version, fall back to the package's README/`dist/index.d.ts` for the
+current `createNeonAuth` config shape.
+
+- [ ] **Step 2: Configure the server instance (fallback, if the codemod didn't scaffold this)**
 
 ```ts
 import "server-only";
@@ -360,29 +368,17 @@ import { createNeonAuth } from "@neondatabase/auth";
 if (!process.env.NEON_AUTH_BASE_URL) {
   throw new Error("NEON_AUTH_BASE_URL is not set.");
 }
-if (!process.env.NEON_AUTH_COOKIE_SECRET) {
-  throw new Error("NEON_AUTH_COOKIE_SECRET is not set.");
-}
-if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-  throw new Error("GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET are not set.");
-}
 
 export const auth = createNeonAuth({
   baseURL: process.env.NEON_AUTH_BASE_URL,
-  secret: process.env.NEON_AUTH_COOKIE_SECRET,
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    },
-  },
 });
 ```
 
-If Step 1 turned up a different config shape (e.g. `emailAndPassword: { enabled: false }` needing
-to be explicit, or a different key than `socialProviders`), use what the installed package
-actually expects instead of this snippet — the point of this file is "Google-only, no
-email/password provider," not these exact key names.
+No `secret`/`socialProviders` config is expected here — Google is already configured as Neon's
+shared OAuth provider server-side (Prerequisites #3), and Neon Auth manages its own signing keys
+(Prerequisites #2). If the installed package's types disagree (require a `secret` or provider
+list anyway), that's a real signal the hosted config doesn't fully replace client-side setup —
+follow what the types actually require, don't force this shape to compile by inventing values.
 
 - [ ] **Step 3: Wire the handler route**
 
@@ -396,7 +392,8 @@ export const { GET, POST } = auth.handler;
 
 If the installed `@neondatabase/auth` version exports the handler differently (a single
 `toNextJsHandler(auth)` helper is common in Better-Auth-derived libraries), adjust to match —
-verify by checking the package's own Next.js integration example rather than assuming this form.
+verify by checking the package's own Next.js integration example, or what the codemod generated in
+Step 1, rather than assuming this form.
 
 - [ ] **Step 4: Typecheck and build**
 
@@ -410,7 +407,7 @@ Expected: PASS. This won't yet be reachable from any page — that's Tasks 4-7.
 
 ```bash
 git add src/lib/auth src/app/api/auth package.json pnpm-lock.yaml
-git commit -m "feat: add Neon Auth server instance with Google as the only provider"
+git commit -m "feat: add Neon Auth server instance (Google via Neon's shared OAuth app)"
 ```
 
 ---
@@ -2824,12 +2821,14 @@ git commit -m "test: add end-to-end authorization and cascade-delete coverage"
 ```bash
 vercel env add DATABASE_URL production
 vercel env add NEON_AUTH_BASE_URL production
-vercel env add NEON_AUTH_COOKIE_SECRET production
-vercel env add GOOGLE_CLIENT_ID production
-vercel env add GOOGLE_CLIENT_SECRET production
 vercel env add ADMIN_EMAIL production
 vercel env add INVITE_CODE_SECRET production
 ```
+
+(No `NEON_AUTH_COOKIE_SECRET`/`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — see the Prerequisites
+section's real findings; Neon Auth manages its own signing keys and Google runs through Neon's
+shared OAuth app.) The production domain (`https://sodales.vercel.app`) is already registered as
+a trusted Neon Auth domain, so no domain-registration step is needed here.
 
 Remove the now-unused `NEXT_PUBLIC_DEMO_MODE` production env var:
 
