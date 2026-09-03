@@ -1,56 +1,69 @@
 # Sodales Academy
 
-> ⚠️ **Interim file.** Task 20 of the implementation plan replaces this with the full version.
-> An earlier draft of this file described a six-app Turborepo monorepo. **That is not what this
-> repo is** — see "What changed", below.
-
 ## What this is
 
 **Sodales Academy, Phase 1** — a standalone, frontend-only Next.js 16 learning site. No database,
 no authentication, no server persistence. Course content is Markdown on disk; the logged-in user
-is hardcoded. The goal is a public, clickable demo on Vercel.
+is hardcoded; progress lives in `localStorage`. The goal is a public, clickable demo on Vercel that
+still reads as a real product.
 
 - **Spec (binding authority):** `docs/superpowers/specs/2026-09-03-academy-frontend-design.md`
 - **Plan:** `docs/superpowers/plans/2026-09-03-academy-phase-1.md`
+- **Coding guidelines:** `docs/coding-guidelines.md`
 
-## What changed from the older docs
+`docs/00-platform.md` through `docs/06-store.md` describe a six-app Turborepo monorepo. **No such
+code exists.** Those SDDs are the wider Sodales roadmap, not this repository. Where they conflict
+with the spec above, **the spec wins** — it records eight explicit deviations in §11 (Inter-only
+type, Google OAuth + invite code instead of email/password, a standalone repo instead of a
+monorepo, Next.js 16 instead of 15, among others).
 
-`docs/00-platform.md` through `docs/06-store.md` describe a six-app monorepo and are written in the
-past tense as though built. **No such code exists.** Those SDDs are the wider Sodales roadmap, not
-this repository. Where they conflict with the spec above, **the spec wins** — it records seven
-explicit deviations in §11. The most important:
-
-| Older docs say | This repo does |
-| --- | --- |
-| `apps/academy` inside a monorepo with `packages/ui` | Standalone repo, app at the root |
-| pnpm + Turborepo + Docker + `make` commands | pnpm only; no Turborepo, no Docker, no Makefile |
-| Neon Postgres + Drizzle + Neon Auth | Nothing — Phase 2 |
-| Email/password sign-up | Google OAuth + shared invite code — Phase 2 |
-| Source Serif 4 for editorial text | **Inter only, no serif** |
-| Next.js 15 | Next.js 16.3 |
-
-## The seam — the one thing to understand
+## The seam, and why it matters
 
 Every page reads data through a small set of async functions whose signatures already match their
-Phase 2 database equivalents. Phase 2 swaps their bodies for SQL and real auth; **no page changes.**
+Phase 2 database equivalents:
 
 - `src/lib/content/queries.ts` — `getCourses`, `getCourseBySlug`, `getLesson`, `getCatalogStats`
 - `src/lib/session.ts` — `getSession`, `requireUser`, `requireRole`, `getEnrollments`
 
-Breaking the seam breaks the whole point of Phase 1.
+Phase 1 implements them over the filesystem and a cookie; Phase 2 reimplements the same signatures
+over SQL and real auth. **Pages, components, and layouts change in neither direction** — that
+swap-in is the entire point of Phase 1. Every one of these functions is `async` even though Phase 1
+needs no `await`; making them synchronous now would force a call-site rewrite later. If a page ever
+reads `content/`, `localStorage`, or the role cookie directly instead of going through one of these
+functions, Phase 2 stops being a body-swap and becomes a rewrite.
 
-## Rules
+## Rules that get broken most
 
-- **Never** read from `content/` outside `src/lib/content/loader.ts`.
-- **Never** touch `localStorage` outside `src/lib/progress.ts`.
-- **Never** read the role cookie outside `src/lib/session.ts`.
-- **Never report success for something that did not happen.** Demo actions toast
-  `"Demo mode — changes aren't saved yet."` No fake success screens.
-- **Inter only.** No serif. Weights 400 and 700.
-- **Electric Violet `#5E4FB3` is the only action colour.** Never violet text on obsidian.
-- **The wordmark renders only through `<BrandWordmark />`**, never as live text.
-- **Next 16:** `params`, `searchParams`, and `cookies()` are async — `await` them.
-- **`next lint` does not exist.** Run `pnpm lint` (it calls `eslint`).
+- **Never import from `content/` outside `src/lib/content/loader.ts`.** It is the only module
+  permitted to touch the filesystem for course data. Anywhere else breaks the seam and duplicates
+  frontmatter-parsing logic that Phase 2 deletes wholesale.
+- **Never touch `localStorage` outside `src/lib/progress.ts`.** Progress state has one owner;
+  scattering reads/writes makes the seeded-vs-real-state hydration logic impossible to reason
+  about and risks a hydration mismatch.
+- **Never read the role cookie outside `src/lib/session.ts`.** `requireUser`/`requireRole` are the
+  only sanctioned guards; reading the cookie elsewhere means Phase 2's real auth swap misses that
+  call site and the guard silently stops working.
+- **Never report success for an action that did not happen.** Demo actions (admin forms, auth
+  buttons, publish/unpublish/delete) toast `"Demo mode — changes aren't saved yet."` (or, for auth,
+  `"Sign-in isn't wired up yet."`) and stop. No fake success screens, no optimistic rows, no
+  redirect that implies a write occurred. A demo that lies about what it did is worse than no demo.
+- **Inter only, weights 400 and 700.** No serif anywhere — Source Serif 4 was dropped (spec §11,
+  D-3). Loading a second typeface silently reopens a decision that's already closed.
+- **Electric Violet `#5E4FB3` is the only action colour.** Never violet text on Obsidian — it fails
+  contrast there; use the accessible tint `#887bd8` (`text-violet-accessible`) for text/controls on
+  dark surfaces instead.
+- **The wordmark renders only through `<BrandWordmark />`**, never as live text. Brand guidelines
+  require it ship as artwork; setting it as text bypasses that requirement invisibly.
+- **Next 16: `params`, `searchParams`, and `cookies()` are async.** `await` them. This is a
+  breaking change from Next 15 and earlier training data — code that destructures them
+  synchronously fails to compile.
+- **`next lint` does not exist.** Run `pnpm lint` (it calls `eslint` directly); `next build` no
+  longer lints either.
+- **Streaming responses can't change their HTTP status after the fact.** Because the root layout
+  reads `cookies()` (via `getSession`), every route is dynamic and streams its shell before
+  `notFound()`/`redirect()` resolve — the browser navigates correctly, but a plain `curl` (or any
+  non-JS client) sees `200` instead of `404`/`307`. This is documented Next.js behavior
+  (`node_modules/next/dist/docs/.../not-found.md`, "Status Codes"), not a bug to work around.
 
 ## Commands
 
@@ -61,6 +74,36 @@ pnpm test       # vitest
 pnpm lint       # eslint
 pnpm typecheck  # tsc --noEmit
 ```
+
+## Where things live
+
+| Path | Responsibility |
+| --- | --- |
+| `content/courses/<slug>/course.md` | Course frontmatter — title, description, category, level, instructor |
+| `content/courses/<slug>/<n>-<slug>.md` | One lesson: frontmatter + Markdown body |
+| `src/lib/content/types.ts` | Types mirroring the Phase 2 DB schema field-for-field |
+| `src/lib/content/loader.ts` | **The only file that reads `content/`.** Parses frontmatter, orders, validates uniqueness |
+| `src/lib/content/queries.ts` | `getCourses` / `getCourseBySlug` / `getLesson` / `getCatalogStats` / `getAllCourses` (admin) — the Phase 2 seam |
+| `src/lib/session.ts` | `getSession` / `requireUser` / `requireRole` / `getEnrollments`, role from cookie |
+| `src/lib/progress.ts` | Client-only `localStorage` completion tracking, plus `useCompletedLessonIds`/`useLessonComplete` (`useSyncExternalStore`, not a mount effect) |
+| `src/lib/validation.ts` | zod schemas (`courseInputSchema`, `signUpSchema`, `signInSchema`), shared verbatim with Phase 2 |
+| `src/content/session.ts` | The hardcoded demo user and their enrollments (`DEMO_USER`, `DEMO_ENROLLMENTS`) |
+| `src/components/brand/brand-wordmark.tsx` | The only place the wordmark is rendered |
+| `src/components/layout/` | Header, footer, nav, role switcher |
+| `src/components/course/` | Course row, outline, dashboard cards/stats |
+| `src/components/lesson/` | Markdown body, sidebar, completion toggle |
+| `src/components/admin/` | Course form, modules editor, row actions |
+| `src/components/auth/` | Google button, invite-code form (both visual only) |
+| `src/components/ui/` | shadcn primitives (base-ui under the hood) |
+| `src/app/(site)/` | Public + learner routes — home, `/courses`, `/dashboard`, `/learn` (has `SiteHeader`/`SiteFooter`) |
+| `src/app/(auth)/` | `/login`, `/sign-up` — split-screen layout, no site chrome |
+| `src/app/admin/` | `/admin/*` — sidebar shell, gated by `requireRole` in its layout |
+
+## Phase 2 backlog
+
+Neon Postgres, Drizzle ORM, Neon Auth / Google OAuth, the shared invite code, enrolled-only lesson
+comments, a Tiptap lesson editor, real server-side persistence, Docker. See spec §11 for the eight
+recorded deviations from `docs/02-academy.md` and why each was made.
 
 ## Context — The Playbook PH
 
