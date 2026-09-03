@@ -1,10 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { loadAllCourses } from "./loader";
-
-const CONTENT_ROOT = path.join(process.cwd(), "content", "courses");
 
 describe("loadAllCourses", () => {
   it("parses course frontmatter into a CourseDetail", async () => {
@@ -72,24 +71,32 @@ describe("loadAllCourses", () => {
   });
 
   it("rejects an invalid level with its course frontmatter field", async () => {
-    await withTemporaryCourse({ level: "expert", status: "published" }, async (slug) => {
-      await expect(loadAllCourses()).rejects.toThrow(`Invalid level — ${slug}/course.md: level`);
+    await withTemporaryCourse({ level: "expert", status: "published" }, async (slug, root) => {
+      await expect(loadAllCourses(root)).rejects.toThrow(
+        `Invalid level — ${slug}/course.md: level`,
+      );
     });
   });
 
   it("rejects an invalid status with its course frontmatter field", async () => {
-    await withTemporaryCourse({ level: "beginner", status: "archived" }, async (slug) => {
-      await expect(loadAllCourses()).rejects.toThrow(`Invalid status — ${slug}/course.md: status`);
+    await withTemporaryCourse({ level: "beginner", status: "archived" }, async (slug, root) => {
+      await expect(loadAllCourses(root)).rejects.toThrow(
+        `Invalid status — ${slug}/course.md: status`,
+      );
     });
   });
 });
 
+// Isolated from content/courses/ — loadAllCourses() scans that directory for
+// the real app and for queries.test.ts concurrently; writing temporary fixtures
+// there would race those reads.
 async function withTemporaryCourse(
   frontmatter: { level: string; status: string },
-  run: (slug: string) => Promise<void>,
+  run: (slug: string, root: string) => Promise<void>,
 ): Promise<void> {
   const slug = `invalid-course-${randomUUID()}`;
-  const directory = path.join(CONTENT_ROOT, slug);
+  const root = await mkdtemp(path.join(os.tmpdir(), "academy-loader-test-"));
+  const directory = path.join(root, slug);
 
   await mkdir(directory);
 
@@ -107,8 +114,8 @@ instructorName: Test Instructor
 `,
     );
 
-    await run(slug);
+    await run(slug, root);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
   }
 }

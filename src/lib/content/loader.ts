@@ -9,22 +9,25 @@ const CONTENT_ROOT = path.join(process.cwd(), "content", "courses");
 /**
  * The ONLY module permitted to read from content/.
  * Pages and components must go through src/lib/content/queries.ts instead.
+ *
+ * `root` defaults to the real content directory; tests may override it to load
+ * an isolated fixture tree without touching the directory the app itself reads.
  */
-export async function loadAllCourses(): Promise<CourseDetail[]> {
-  const slugs = await readCourseSlugs();
-  const courses = await Promise.all(slugs.map(loadCourse));
+export async function loadAllCourses(root: string = CONTENT_ROOT): Promise<CourseDetail[]> {
+  const slugs = await readCourseSlugs(root);
+  const courses = await Promise.all(slugs.map((slug) => loadCourse(slug, root)));
 
   assertUniqueSlugs(courses);
   return courses.sort((a, b) => a.title.localeCompare(b.title));
 }
 
-async function readCourseSlugs(): Promise<string[]> {
-  const entries = await readdir(CONTENT_ROOT, { withFileTypes: true });
+async function readCourseSlugs(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
   return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
-async function loadCourse(slug: string): Promise<CourseDetail> {
-  const dir = path.join(CONTENT_ROOT, slug);
+async function loadCourse(slug: string, root: string): Promise<CourseDetail> {
+  const dir = path.join(root, slug);
   const raw = await readFile(path.join(dir, "course.md"), "utf8");
   const { data } = matter(raw);
 
