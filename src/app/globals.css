@@ -13,8 +13,19 @@
 
   --color-background: var(--color-ivory);
   --color-foreground: var(--color-obsidian);
+  --color-card: var(--color-paper);
+  --color-card-foreground: var(--color-obsidian);
+  --color-popover: var(--color-paper);
+  --color-popover-foreground: var(--color-obsidian);
+  --color-secondary: var(--color-pale-lilac);
+  --color-secondary-foreground: var(--color-deep-ink);
+  --color-muted: var(--color-pale-lilac);
   --color-muted-foreground: var(--color-graphite);
+  --color-accent: var(--color-pale-lilac);
+  --color-accent-foreground: var(--color-deep-ink);
+  --color-destructive: var(--color-deep-ink);
   --color-border: color-mix(in srgb, var(--color-graphite) 20%, transparent);
+  --color-input: var(--color-border);
   --color-primary: var(--color-violet);
   --color-primary-foreground: var(--color-ivory);
   --color-ring: var(--color-violet);
