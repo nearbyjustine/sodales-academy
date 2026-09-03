@@ -7,6 +7,10 @@
   --color-ivory: #f4f2ed;
   --color-graphite: #35373b;
   --color-violet: #5e4fb3;
+  /* Accessible violet tint for text/controls on Obsidian only — #5e4fb3 fails
+     contrast there. Never use for actions; Electric Violet stays the only
+     action colour. */
+  --color-violet-accessible: #887bd8;
   --color-deep-ink: #211c35;
   --color-pale-lilac: #ded9ef;
   --color-paper: #fbfaf7;
