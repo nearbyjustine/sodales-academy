@@ -77,6 +77,11 @@ export async function getCatalogStats(): Promise<{
   };
 }
 
+/** Admin-only: every course regardless of status. Public pages must use getCourses. */
+export async function getAllCourses(): Promise<CourseSummary[]> {
+  return (await loadAllCourses()).map(toSummary);
+}
+
 function toSummary(course: CourseDetail): CourseSummary {
   return {
     id: course.id,
