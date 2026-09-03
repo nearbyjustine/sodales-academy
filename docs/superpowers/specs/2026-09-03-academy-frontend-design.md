@@ -90,8 +90,20 @@ sodales/
 
 ## 4. Stack
 
-Next.js 15 App Router · TypeScript (strict) · Tailwind v4 · shadcn/ui · zod v4 · pnpm ·
-`gray-matter` + `remark`/`react-markdown` for Markdown · `sonner` for toasts · Vercel (`sin1`).
+**Next.js 16.3** App Router · React 19.2 · TypeScript 5 (strict) · Tailwind v4.3 · shadcn/ui ·
+zod v4 · pnpm · `gray-matter` + `react-markdown`/`remark-gfm` for Markdown · `sonner` for
+toasts · Vitest 5 · Vercel (`sin1`).
+
+**Version note.** The existing SDDs specify Next.js 15; current stable is 16.3.4. A greenfield
+project starting today takes 16. Consequences carried through this spec:
+
+- `middleware.ts` is deprecated in favour of `proxy.ts`. Phase 1 needs neither — all guarding
+  happens in page-level guards, which is where `docs/02-academy.md` §3 puts authorization
+  anyway. Phase 2 revisits this.
+- `params`, `searchParams`, and `cookies()` are **async** and must be awaited.
+- `next lint` is removed and `next build` no longer lints; ESLint runs as its own script.
+- Turbopack is the default bundler.
+- Requires Node 20.9+ (machine has 26.8.1) and TypeScript 5.1+.
 
 pnpm is not currently installed on the development machine and will be installed via corepack.
 
@@ -200,6 +212,7 @@ Recorded explicitly so the SDD can be reconciled later.
 | D-5 | **Standalone repo**, no monorepo, no `packages/ui` | Owner decision; each teammate owns a repo, compiled later |
 | D-6 | Admin seeding by manual promotion after first Google sign-in, not `ADMIN_EMAIL` + password sign-up | Follows from D-2 |
 | D-7 | Docker deferred to Phase 2 | No second service to containerize in Phase 1 |
+| D-8 | **Next.js 16**, not 15 | 16.3.4 is current stable; greenfield project. See §4 |
 
 ## 12. Repository conventions
 
