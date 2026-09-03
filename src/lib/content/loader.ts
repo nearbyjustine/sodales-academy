@@ -2,7 +2,7 @@ import "server-only";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
-import type { CourseDetail, CourseModule, Lesson, Level, CourseStatus } from "./types";
+import { LEVELS, type CourseDetail, type CourseModule, type Lesson, type Level, type CourseStatus } from "./types";
 
 const CONTENT_ROOT = path.join(process.cwd(), "content", "courses");
 
@@ -37,8 +37,8 @@ async function loadCourse(slug: string): Promise<CourseDetail> {
     title: requireString(data.title, `${slug}/course.md: title`),
     description: requireString(data.description, `${slug}/course.md: description`),
     category: requireString(data.category, `${slug}/course.md: category`),
-    level: data.level as Level,
-    status: (data.status ?? "published") as CourseStatus,
+    level: requireLevel(data.level, `${slug}/course.md: level`),
+    status: requireCourseStatus(data.status ?? "published", `${slug}/course.md: status`),
     instructorName: requireString(data.instructorName, `${slug}/course.md: instructorName`),
     lessonCount: lessons.length,
     modules,
@@ -96,6 +96,24 @@ function groupIntoModules(lessons: Lesson[]): CourseModule[] {
 function requireString(value: unknown, where: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`Missing required frontmatter — ${where}`);
+  }
+  return value;
+}
+
+function requireLevel(value: unknown, where: string): Level {
+  if (!isLevel(value)) {
+    throw new Error(`Invalid level — ${where}`);
+  }
+  return value;
+}
+
+function isLevel(value: unknown): value is Level {
+  return typeof value === "string" && LEVELS.some((level) => level === value);
+}
+
+function requireCourseStatus(value: unknown, where: string): CourseStatus {
+  if (value !== "draft" && value !== "published") {
+    throw new Error(`Invalid status — ${where}`);
   }
   return value;
 }

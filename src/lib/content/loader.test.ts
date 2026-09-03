@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { loadAllCourses } from "./loader";
+
+const CONTENT_ROOT = path.join(process.cwd(), "content", "courses");
 
 describe("loadAllCourses", () => {
   it("parses course frontmatter into a CourseDetail", async () => {
@@ -41,4 +46,45 @@ describe("loadAllCourses", () => {
     const fixture = courses.find((c) => c.slug === "test-fixture-course")!;
     expect(fixture.lessonCount).toBe(1);
   });
+
+  it("rejects an invalid level with its course frontmatter field", async () => {
+    await withTemporaryCourse({ level: "expert", status: "published" }, async (slug) => {
+      await expect(loadAllCourses()).rejects.toThrow(`Invalid level — ${slug}/course.md: level`);
+    });
+  });
+
+  it("rejects an invalid status with its course frontmatter field", async () => {
+    await withTemporaryCourse({ level: "beginner", status: "archived" }, async (slug) => {
+      await expect(loadAllCourses()).rejects.toThrow(`Invalid status — ${slug}/course.md: status`);
+    });
+  });
 });
+
+async function withTemporaryCourse(
+  frontmatter: { level: string; status: string },
+  run: (slug: string) => Promise<void>,
+): Promise<void> {
+  const slug = `invalid-course-${randomUUID()}`;
+  const directory = path.join(CONTENT_ROOT, slug);
+
+  await mkdir(directory);
+
+  try {
+    await writeFile(
+      path.join(directory, "course.md"),
+      `---
+title: Invalid Course
+description: A temporary invalid course fixture.
+category: Testing
+level: ${frontmatter.level}
+status: ${frontmatter.status}
+instructorName: Test Instructor
+---
+`,
+    );
+
+    await run(slug);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
