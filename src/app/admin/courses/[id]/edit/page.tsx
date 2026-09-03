@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CourseForm } from "@/components/admin/course-form";
 import { getCourseBySlug } from "@/lib/content/queries";
@@ -6,6 +7,12 @@ import type { CourseInput } from "@/lib/validation";
 import type { CourseDetail } from "@/lib/content/types";
 
 type PageProps = { params: Promise<{ id: string }> };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const course = await getCourseBySlug(id);
+  return { title: course ? `Edit ${course.title}` : "Course not found" };
+}
 
 function toCourseInput(course: CourseDetail): CourseInput {
   return {

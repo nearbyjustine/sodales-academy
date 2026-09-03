@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { FolderOpenIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/table";
 import { CourseRowActions } from "@/components/admin/course-row-actions";
 import { getAllCourses } from "@/lib/content/queries";
+
+export const metadata: Metadata = { title: "Courses" };
 
 export default async function AdminCoursesPage() {
   const courses = await getAllCourses();

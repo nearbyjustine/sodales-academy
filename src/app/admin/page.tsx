@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getAllCourses } from "@/lib/content/queries";
+
+export const metadata: Metadata = { title: "Overview" };
 
 export default async function AdminOverviewPage() {
   const courses = await getAllCourses();
