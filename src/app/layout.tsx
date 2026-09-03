@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
-import { SiteHeader } from "@/components/layout/site-header";
-import { SiteFooter } from "@/components/layout/site-footer";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,9 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="antialiased">
-        <SiteHeader />
-        <main className="min-h-[60vh]">{children}</main>
-        <SiteFooter />
+        {children}
         <Toaster richColors position="top-right" />
       </body>
     </html>
