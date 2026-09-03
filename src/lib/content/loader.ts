@@ -1,0 +1,121 @@
+import "server-only";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import matter from "gray-matter";
+import type { CourseDetail, CourseModule, Lesson, Level, CourseStatus } from "./types";
+
+const CONTENT_ROOT = path.join(process.cwd(), "content", "courses");
+
+/**
+ * The ONLY module permitted to read from content/.
+ * Pages and components must go through src/lib/content/queries.ts instead.
+ */
+export async function loadAllCourses(): Promise<CourseDetail[]> {
+  const slugs = await readCourseSlugs();
+  const courses = await Promise.all(slugs.map(loadCourse));
+
+  assertUniqueSlugs(courses);
+  return courses.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+async function readCourseSlugs(): Promise<string[]> {
+  const entries = await readdir(CONTENT_ROOT, { withFileTypes: true });
+  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+}
+
+async function loadCourse(slug: string): Promise<CourseDetail> {
+  const dir = path.join(CONTENT_ROOT, slug);
+  const raw = await readFile(path.join(dir, "course.md"), "utf8");
+  const { data } = matter(raw);
+
+  const lessons = await loadLessons(dir, slug);
+  const modules = groupIntoModules(lessons);
+
+  return {
+    id: slug,
+    slug,
+    title: requireString(data.title, `${slug}/course.md: title`),
+    description: requireString(data.description, `${slug}/course.md: description`),
+    category: requireString(data.category, `${slug}/course.md: category`),
+    level: data.level as Level,
+    status: (data.status ?? "published") as CourseStatus,
+    instructorName: requireString(data.instructorName, `${slug}/course.md: instructorName`),
+    lessonCount: lessons.length,
+    modules,
+  };
+}
+
+async function loadLessons(dir: string, courseSlug: string): Promise<Lesson[]> {
+  const files = (await readdir(dir))
+    .filter((f) => f.endsWith(".md") && f !== "course.md")
+    .sort();
+
+  const lessons = await Promise.all(
+    files.map(async (file, index) => {
+      const raw = await readFile(path.join(dir, file), "utf8");
+      const { data, content } = matter(raw);
+      const slug = file.replace(/^\d+-/, "").replace(/\.md$/, "");
+
+      return {
+        id: `${courseSlug}/${slug}`,
+        courseSlug,
+        slug,
+        title: requireString(data.title, `${courseSlug}/${file}: title`),
+        moduleTitle: requireString(data.module, `${courseSlug}/${file}: module`),
+        position: index + 1,
+        isPreview: data.isPreview === true,
+        content: content.trim(),
+      } satisfies Lesson;
+    }),
+  );
+
+  assertUniqueLessonSlugs(courseSlug, lessons);
+  return lessons;
+}
+
+function groupIntoModules(lessons: Lesson[]): CourseModule[] {
+  const order: string[] = [];
+  const byTitle = new Map<string, Lesson[]>();
+
+  for (const lesson of lessons) {
+    if (!byTitle.has(lesson.moduleTitle)) {
+      byTitle.set(lesson.moduleTitle, []);
+      order.push(lesson.moduleTitle);
+    }
+    byTitle.get(lesson.moduleTitle)!.push(lesson);
+  }
+
+  return order.map((title, index) => ({
+    id: `${title.toLowerCase().replace(/\s+/g, "-")}-${index}`,
+    title,
+    position: index + 1,
+    lessons: byTitle.get(title)!,
+  }));
+}
+
+function requireString(value: unknown, where: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`Missing required frontmatter — ${where}`);
+  }
+  return value;
+}
+
+function assertUniqueSlugs(courses: CourseDetail[]): void {
+  const seen = new Set<string>();
+  for (const course of courses) {
+    if (seen.has(course.slug)) {
+      throw new Error(`Duplicate course slug: ${course.slug}`);
+    }
+    seen.add(course.slug);
+  }
+}
+
+function assertUniqueLessonSlugs(courseSlug: string, lessons: Lesson[]): void {
+  const seen = new Set<string>();
+  for (const lesson of lessons) {
+    if (seen.has(lesson.slug)) {
+      throw new Error(`Duplicate lesson slug in ${courseSlug}: ${lesson.slug}`);
+    }
+    seen.add(lesson.slug);
+  }
+}
