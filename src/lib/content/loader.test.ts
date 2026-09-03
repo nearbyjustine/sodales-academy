@@ -47,6 +47,30 @@ describe("loadAllCourses", () => {
     expect(fixture.lessonCount).toBe(1);
   });
 
+  it("loads all four published courses plus the draft fixture", async () => {
+    const courses = await loadAllCourses();
+    const published = courses.filter((c) => c.status === "published");
+    expect(published).toHaveLength(4);
+    expect(published.map((c) => c.slug).sort()).toEqual([
+      "brand-identity-essentials",
+      "landing-your-first-client",
+      "pricing-and-proposals",
+      "web-development-foundations",
+    ]);
+  });
+
+  it("every lesson has a non-trivial body", async () => {
+    const courses = await loadAllCourses();
+    const lessons = courses
+      .filter((c) => c.status === "published")
+      .flatMap((c) => c.modules.flatMap((m) => m.lessons));
+
+    expect(lessons).toHaveLength(19);
+    for (const lesson of lessons) {
+      expect(lesson.content.length).toBeGreaterThan(400);
+    }
+  });
+
   it("rejects an invalid level with its course frontmatter field", async () => {
     await withTemporaryCourse({ level: "expert", status: "published" }, async (slug) => {
       await expect(loadAllCourses()).rejects.toThrow(`Invalid level — ${slug}/course.md: level`);
