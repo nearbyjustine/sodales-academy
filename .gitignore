@@ -26,6 +26,9 @@ dist/
 # testing
 coverage/
 
+# agent scratch (SDD ledger, briefs, review packages)
+.superpowers/
+
 # macOS
 .DS_Store
 
