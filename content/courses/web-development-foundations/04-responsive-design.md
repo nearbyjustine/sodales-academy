@@ -4,9 +4,32 @@ module: Styling
 isPreview: false
 ---
 
-## Begin with the narrow layout
+## Before: three screenshots, three patches
 
-Mobile-first CSS starts with the smallest practical layout, then adds changes when the content needs more room. The approach keeps the base rules compact and makes each breakpoint answer a visible problem.
+The first pass targets familiar device widths. Its hero looks right in the designer’s three screenshots:
+
+```css
+.page { width: 1200px; }
+.hero { display: grid; grid-template-columns: 720px 480px; }
+
+@media (max-width: 768px) {
+  .page { width: 720px; }
+}
+
+@media (max-width: 390px) {
+  .page { width: 358px; }
+  .hero { display: block; }
+}
+```
+
+The annotations on the review copy identify four failures:
+
+1. A `430px` phone matches none of the intended layouts and shows a horizontal scrollbar.
+2. Fixed page widths leave no flexible space for browser zoom or larger default text.
+3. The two hero columns total the whole page width before any gap is added.
+4. The breakpoint names a screenshot width, not the point where the content becomes cramped.
+
+## After: one flexible base
 
 ```css
 .page {
@@ -27,26 +50,21 @@ Mobile-first CSS starts with the smallest practical layout, then adds changes wh
 }
 ```
 
-The page has breathing room on a small screen and stops growing at a readable maximum. The hero gains columns only when 48rem gives both parts enough space.
+The narrow layout is now the default. The page follows its container but stops at `70rem`; the hero gains columns when both pieces have enough room. The `fr` units divide available grid space after the gap rather than pretending the gap has no width.
 
-## Let content choose breakpoints
+> A breakpoint records where content needs a different arrangement. It does not certify a particular phone model.
 
-Do not collect device names and design around them. Resize the browser slowly. Add a breakpoint where navigation wraps badly, a text line becomes tiring to read, or two columns become cramped. A new phone width should still work because the layout responds to available space rather than a model number.
+## Notes from the resize pass
 
-Use relative units according to the job:
+Dragging the viewport exposes the exact moment the navigation wraps and the hero feels crowded. That evidence sets the breakpoint. A fluid heading such as `clamp(2rem, 5vw, 4rem)` can grow between limits without another media query.
 
-- `rem` ties spacing and breakpoints to the root text size.
-- `%` lets an element follow its containing block.
-- `vw` and `vh` follow the viewport, but need limits for readable text and usable controls.
-- `fr` divides available space inside a grid.
-- `ch` gives a useful measure for line length.
+Relative units have different jobs:
 
-Fluid values can remove unnecessary breakpoints. For example, `font-size: clamp(2rem, 5vw, 4rem)` grows between a safe minimum and maximum.
+- `rem` follows the root text size.
+- `%` follows the containing block.
+- `fr` shares free grid space.
+- `ch` can cap a readable text measure.
 
-## Test stress, not screenshots
+## The 200% zoom result
 
-Check more than three preset widths. Zoom to 200%, increase the browser’s default text size, replace a short heading with a long one, and navigate with a keyboard. Test landscape as well as portrait.
-
-> Responsive work is complete when the content remains readable and operable across changing space, not when three screenshots match a design file.
-
-Inspect any horizontal scrollbar immediately. Common causes include fixed widths, unbroken URLs, large images without `max-width: 100%`, and children that refuse to shrink. Fix the element causing overflow instead of hiding the page’s overflow, which can make content unreachable.
+At 200% zoom, the revised page returns to one column and keeps every control reachable. A long heading wraps rather than escaping its card. Large images use `max-width: 100%`. The final check keeps overflow visible during debugging, because hiding it would only conceal content that a reader still cannot reach.

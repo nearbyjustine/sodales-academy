@@ -4,30 +4,38 @@ module: Pricing
 isPreview: true
 ---
 
-## Choose the model from the uncertainty
+## The brief and the two estimates
 
-Hourly pricing charges for time worked. It fits support, investigation, and open-ended work where neither side can define the full path in advance. The client pays for changing priorities, and the freelancer does not have to predict an unknown number of hours.
+A bakery asks Ivo for a landing page with supplied copy, one enquiry form, responsive implementation, and one feedback round. He estimates twenty hours and charges ₱1,500 per hour.
 
-Fixed pricing charges an agreed amount for an agreed result and scope. It fits a defined website, identity package, or audit when the deliverables, review process, and responsibilities can be written down. The freelancer carries the estimation risk, so the price needs room for project management, revisions, and normal surprises.
+```text
+Hourly estimate: 20 hours × ₱1,500 = ₱30,000
+Fixed quote:                         ₱36,000
+```
 
-> A fixed fee is not an unlimited promise. It only works when the boundaries and change process are visible.
+The fixed quote is higher because Ivo carries the estimation risk. If the agreed page takes twenty-four hours, the fee stays ₱36,000. If it takes sixteen, the fee also stays ₱36,000. The client is buying a defined page and review process; Ivo still tracks time to learn whether his estimate was sound.
 
-## Understand the speed problem
+Under hourly billing, the final invoice follows the recorded time:
 
-Suppose a developer improves a process and can now build the same landing page in twelve hours instead of twenty. At the same hourly rate, the faster delivery earns less even though the client receives the page sooner. Hourly billing links revenue to elapsed effort, so efficiency can reduce the invoice.
+| Delivery | Hours | Invoice |
+| --- | ---: | ---: |
+| Original estimate | 20 | ₱30,000 |
+| Faster method | 12 | ₱18,000 |
+| Form needs investigation | 27 | ₱40,500 |
 
-A fixed price can reward that experience, provided the freelancer does not hide reduced scope or rush quality. The client agrees to the deliverable and fee before the work starts. The internal hours still matter for estimating whether the project is profitable.
+The twelve-hour row exposes the speed problem. Ivo improved his process and delivered the same agreed work sooner, yet earned ₱12,000 less than his original estimate. Hourly pricing pays for elapsed effort. It still makes sense when the work itself cannot be predicted.
 
-## Compare with a real brief
+> A fixed fee covers a fixed boundary. New pages, extra feedback rounds, or changed copy need a change order rather than silent free work.
 
-Before choosing, answer these questions:
+## The decision
 
-- Can both sides describe what “done” means?
-- Are the required inputs and decision-makers known?
-- How likely is the direction to change after work begins?
-- Can the work be divided into a paid discovery phase and a defined build?
-- Does the client need ongoing access rather than one deliverable?
+For this brief, Ivo chooses the fixed quote because both sides can answer these questions:
 
-Use hourly pricing for a month of small maintenance requests with changing priorities. Use a fixed fee for a five-page marketing site with supplied copy, named templates, two feedback rounds, and a launch target. If the client wants a new product but cannot define its users or features, price discovery first. That creates the information needed to price later phases responsibly.
+- Which page and form will exist at handoff?
+- Who supplies copy and approves feedback?
+- How many review rounds are included?
+- What event counts as delivery?
 
-Whichever model you choose, track your time. Those records show where estimates were weak, which tasks repeat, and whether the agreed fee covers the work you perform.
+Now imagine the bakery asks for “site help for the next month” and expects priorities to change each week. An hourly arrangement with a spending cap fits that uncertainty better. Another workable split is paid hourly discovery followed by a fixed build once the pages and responsibilities are known.
+
+Neither quote removes the need for time records. If the fixed project takes twenty-seven hours, Ivo’s notes show whether the form, feedback, or his estimate caused the gap before he prices the next one.

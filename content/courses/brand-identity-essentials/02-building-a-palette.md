@@ -4,11 +4,11 @@ module: Systems
 isPreview: false
 ---
 
-## Assign roles before choosing combinations
+## Before: seven attractive swatches
 
-A working palette names what each colour does. Start with page background, raised surface, primary text, secondary text, border, accent, and focus or status colours. A role-based system prevents each new page from becoming a fresh colour exercise.
+The first palette file contains seven colours and no usage notes. A designer uses violet for a heading. A developer uses it for a button. Someone else puts pale lilac body text on paper because the combination looks quiet. Every choice comes from taste, so the same colours produce three different systems.
 
-The Sodales palette provides a concrete example:
+The source values themselves are clear:
 
 ```css
 --color-obsidian: #111111;
@@ -20,24 +20,32 @@ The Sodales palette provides a concrete example:
 --color-paper: #fbfaf7;
 ```
 
-These names are stable references, but a component should still express purpose. For example, a page could map paper to its background, obsidian to primary text, graphite to secondary text, and violet to an accent. Record that mapping so another designer does not have to infer it from screenshots.
+## Audit notes
 
-## Check pairs, not isolated swatches
+The problem appears when each swatch meets content. Colour contrast belongs to a foreground-background pair, at a particular text size and weight. A colour that works as a large decorative shape may fail as small text.
 
-Contrast belongs to a foreground-background pair. A violet that works for a large decorative shape may not work for small text on ivory. Check each pair with a contrast tool at the intended text size and weight. Test normal, hover, focus, disabled, error, and selected states separately.
+The audit records each real use instead of rating colours in isolation:
 
-> Never use colour as the only signal. Pair a red field border with an error message, or a selected tab colour with shape, weight, or an indicator.
+| Element | Foreground | Background | Check |
+| --- | --- | --- | --- |
+| Body copy | Obsidian | Paper | Text contrast |
+| Secondary copy | Graphite | Ivory | Text contrast |
+| Link | Violet | Paper | Normal, hover, focus |
+| Quiet panel | Deep ink | Pale lilac | Text and icons |
 
-Also inspect the palette under common colour-vision simulations and in grayscale. The goal is not to remove colour; it is to make sure the task remains understandable when colour differences are harder to perceive.
+Each proposed pair still needs a contrast tool check at its intended size. Grayscale and colour-vision simulations help reveal controls that depend on hue alone.
 
-## Build a small usage sheet
+> A selected tab needs more than a new colour. Add an underline, weight change, shape, or another visible indicator.
 
-Create samples of the combinations that will ship:
+## After: roles people can reuse
 
-- Body text and links on the main background
-- Text and controls on the accent colour
-- Cards against the page background
-- Borders and focus indicators beside each surface
-- Success, warning, and error messages with icons or labels
+The revised file maps the palette to jobs: paper for the main background, ivory for an alternate surface, obsidian for primary text, graphite for secondary text, violet for tested accents, deep ink for dark surfaces, and pale lilac for quiet panels.
 
-Write “do not” examples beside them. Pale lilac may suit a quiet surface but not small text on paper. A brand palette earns its keep when a developer can choose a tested pair from the sheet without inventing another hex value.
+It also includes a short handoff list:
+
+- Approved text and background pairs
+- Link and button states, including keyboard focus
+- Error and success labels that do not rely on colour
+- Examples of pale lilac used as a surface rather than small text
+
+The seven hex values have not changed. The after version removes guesswork by showing where each one belongs and which combinations have been checked.

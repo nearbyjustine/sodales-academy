@@ -4,33 +4,42 @@ module: Finding Work
 isPreview: true
 ---
 
-## The inbox problem
+## Two messages from the same sender
 
-A cold message arrives without context. The recipient does not know you, did not ask for help, and may already receive several sales messages a week. A paragraph about your skills gives them another job: they must work out whether any of those skills solve a problem they have.
-
-Compare these openings:
+At 9:00, a salon owner opens this:
 
 > I am a passionate web designer offering high-quality websites at affordable rates. Are you interested in my services?
 
-> I tried to book a haircut from your Instagram page, but the booking link opens last month's schedule. Are you the right person to tell?
+The owner has to decide what “high-quality” means, whether the price is affordable, which service is relevant, and why this stranger chose the salon. Deleting the message is easier than doing that work.
 
-The first asks a stranger to evaluate an unknown freelancer. The second begins with a specific observation and a small, easy question. It can start a conversation even if no project follows.
+At 9:04, another salon receives a different note from the same freelancer:
 
-## A pitch and a conversation
+> I tried to book a haircut from your Instagram page, but the booking link opens last month’s schedule. Is that page still in use?
 
-A pitch leads with the seller: services, tools, years of experience, and availability. A conversation leads with something both people can inspect. For a local business, that might be an outdated menu, a confusing enquiry form, or a page that is difficult to use on a phone.
+This message can be checked in seconds. It names one observed detail and asks a question the owner can answer without agreeing to a call. A reply might reveal that the link is obsolete, already being fixed, or causing missed enquiries. Any of those answers gives the freelancer better information than a generic sales pitch.
 
-Before writing, find one detail that proves you paid attention. Then use this four-part shape:
+## The inbox autopsy
 
-1. Say where you found the business.
-2. Name one observable issue or opportunity.
-3. Explain the consequence without exaggerating it.
-4. Ask a question that can be answered in one sentence.
+The first message leads with the sender’s identity, skills, price claim, and request for work. The second leads with shared evidence. That difference changes the recipient’s task from “evaluate an unknown supplier” to “confirm what is happening on my page.”
 
-Do not attach a proposal, quote a fee, or list every service in the opening message. Those belong later, once the other person confirms the problem and wants to discuss it.
+A conversation-opening message usually contains:
 
-## Make the reply easy
+1. Real context for finding the business
+2. One observation visible to both people
+3. A modest consequence, if it can be stated without guessing
+4. One short question
 
-Your first goal is a useful reply, not a sale. “Is that page still in use?” is easier to answer than “Can we schedule a thirty-minute call?” If they say the page is obsolete, you learned something. If they say it causes complaints every week, you have a reason to continue.
+The message does not need a proposal, fee, résumé, attachment, or surprise calendar link. Those ask for decisions before the recipient has confirmed a problem.
 
-Write three possible opening questions about one business. Remove any question that assumes they need to hire you. Send the version that sounds natural when read aloud and gives the recipient room to correct you.
+Here is the same structure with the sales language removed:
+
+```text
+Hi Jo,
+
+I found Field Notes Café through the neighbourhood directory. On a phone, the menu
+link opens a PDF where the prices are cut off on the right. Is that the current menu?
+
+— Mina
+```
+
+If Jo says yes, Mina can offer a screenshot or ask whether customers have mentioned it. If Jo says no, Mina can thank them and leave the conversation there. Both replies are useful; neither required Mina to pretend she already understood the whole business.

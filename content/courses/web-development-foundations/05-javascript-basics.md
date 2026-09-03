@@ -4,59 +4,57 @@ module: Interactivity
 isPreview: false
 ---
 
-## Store values with clear names
+## A menu button, assembled in four passes
 
-JavaScript adds behavior to a page. A variable gives a value a name. Use `const` when the binding will not be reassigned and `let` when it will.
+The HTML already contains a button and a hidden menu. JavaScript needs to connect them without replacing the useful structure that is already there.
 
-```js
-const bookingButton = document.querySelector("[data-booking-button]");
-let isMenuOpen = false;
-```
+### Pass 1: references
 
-The names describe what the values mean. Avoid vague containers such as `data` or `thing`, especially when several elements and states appear in the same file.
-
-## Put repeated behavior in a function
-
-A function accepts input, performs work, and may return output. Keep calculations separate from page updates when possible:
-
-```js
-function formatTotal(amount) {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(amount);
-}
-
-const totalText = document.querySelector("[data-order-total]");
-totalText.textContent = formatTotal(1250);
-```
-
-You can check `formatTotal` with several numbers without clicking through the interface. The last two lines handle the Document Object Model, the browser’s object representation of the HTML page.
-
-## Respond to an event
-
-An event reports something that happened: a click, input change, form submission, or key press. Register a function to run when the event occurs.
+`const` gives each page element a stable name. `let` holds the piece of state that will change:
 
 ```js
 const menuButton = document.querySelector("[data-menu-button]");
 const menu = document.querySelector("[data-menu]");
+let isMenuOpen = false;
+```
 
+Names such as `menuButton` and `isMenuOpen` save the reader from decoding `thing` or `data` later.
+
+### Pass 2: one state change
+
+A function collects the updates that belong together. It receives the desired state rather than guessing from the current CSS.
+
+```js
+function setMenuOpen(open) {
+  isMenuOpen = open;
+  menu.hidden = !open;
+  menuButton.setAttribute("aria-expanded", String(open));
+}
+```
+
+The function changes the visible menu and the button’s accessibility state in the same operation. Its parameter is local input; the two `const` references and `let` state live outside it.
+
+### Pass 3: the event
+
+```js
 menuButton.addEventListener("click", () => {
-  isMenuOpen = !isMenuOpen;
-  menu.hidden = !isMenuOpen;
-  menuButton.setAttribute("aria-expanded", String(isMenuOpen));
+  setMenuOpen(!isMenuOpen);
 });
 ```
 
-The handler updates both the visible menu and the button’s accessibility state. HTML should set the initial `hidden` and `aria-expanded="false"` values so the interface begins in a consistent state.
+The browser fires a click event, then the handler calls the function with the opposite state. Repeated clicks now alternate between open and closed.
 
-> JavaScript should support the page’s task. If ordinary navigation or a native form already does the job, extra event code creates more ways for it to fail.
+### Pass 4: failure checks
 
-After adding an interaction:
+The interaction gets four quick checks:
 
-- Use it with a mouse and keyboard.
-- Reload and confirm the initial state matches the HTML.
-- Try the action several times, not only once.
-- Disable JavaScript and decide what still needs to work.
+- Mouse click opens and closes it more than once.
+- Tab reaches the button; Enter and Space activate it.
+- `aria-expanded` matches the visible state after every change.
+- A reload returns to the state declared in HTML.
 
-A restaurant’s address and telephone number should remain readable even if an animated menu does not run.
+> Native controls carry useful keyboard behavior. A `<button>` needs less repair work than a clickable `<div>`.
+
+## What remains without JavaScript
+
+Turn JavaScript off and reload. The enhanced menu may stop toggling, but essential information needs another route. A restaurant can keep its address and telephone number in the page footer, and primary destinations can remain ordinary links in the HTML. The script owns the toggle; it does not own the only copy of the business details.

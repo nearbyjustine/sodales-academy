@@ -4,15 +4,11 @@ module: Styling
 isPreview: false
 ---
 
-## Start with the box
+## 9:10 a.m.: the bug report
 
-Every element occupies a box made of content, padding, border, and margin. Width normally applies to the content alone, which can produce surprises when padding is added. Set `box-sizing` once so declared dimensions include padding and border:
+“The service cards fit in the design, but the third one drops off the page.” The layout uses three `20rem` cards inside a `60rem` container. It sounds exact until the browser inspector shows what each card occupies.
 
 ```css
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
 .card {
   width: 20rem;
   padding: 1.25rem;
@@ -20,34 +16,28 @@ Every element occupies a box made of content, padding, border, and margin. Width
 }
 ```
 
-Read the layers from the inside out:
-
-- Content holds the text, image, or child elements.
-- Padding creates space inside the border.
-- Border draws the box’s edge.
-- Margin separates the box from its neighbors.
-
-Use the browser inspector’s box-model diagram when an element appears wider or farther away than expected.
-
-## Use flexbox for a row or column
-
-Flexbox arranges items along one main direction. It suits navigation bars, button groups, card internals, and layouts where items need to align or share spare space.
+With the default content-box model, the declared width excludes padding and border. Each box is wider than `20rem`, so three cannot fit. The first repair makes dimensions include those layers:
 
 ```css
-.actions {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
+*, *::before, *::after { box-sizing: border-box; }
 ```
 
-Let `gap` create consistent space between children instead of placing a margin on every child. Add wrapping when content must survive narrow containers or longer translated labels.
+The box-model panel now accounts for content, padding, border, and margin without mental arithmetic. The cards fit at this width, but they still overflow when the browser narrows.
 
-## Use grid for rows and columns
+## 9:32 a.m.: the absolute-positioning trap
 
-Grid controls two dimensions at once. It works well for galleries, feature comparisons, and page regions that need aligned columns.
+The stylesheet tries to protect the row with `position: absolute` and three left offsets. That freezes the cards in coordinates and removes them from normal flow. A longer service description runs underneath the next section because the parent no longer grows with its children.
+
+The debugger writes down the relationship instead:
+
+- The cards form rows and columns.
+- Every card needs a usable minimum width.
+- New rows should appear when space runs out.
+- The space between cards should stay consistent.
+
+Grid matches all four facts. Absolute positioning matches none of them.
+
+## 9:48 a.m.: grid takes over
 
 ```css
 .services {
@@ -57,8 +47,10 @@ Grid controls two dimensions at once. It works well for galleries, feature compa
 }
 ```
 
-This grid creates as many usable columns as the container can hold, while letting a card occupy the full width on a small screen.
+At wide sizes, the browser creates several aligned columns. At narrow sizes, `min(16rem, 100%)` lets a card use the available width instead of forcing overflow.
 
-> Choose the layout from the relationship between items. A one-dimensional relationship points to flexbox; alignment across rows and columns points to grid.
+> Grid handles this two-dimensional card arrangement. Flexbox remains the better fit inside each card, where the buttons form one row or column.
 
-Avoid absolute positioning for the main layout. It removes elements from normal flow, so later content cannot make room for them. Reserve it for overlays or small decorative pieces whose position belongs to a containing box. Build one card with normal flow first, make its content work at several lengths, and then place multiple cards with flexbox or grid.
+## 10:05 a.m.: the retest
+
+The third card now stays in flow, a long heading makes its row taller without overlap, and the buttons wrap inside the card. The final inspector check finds no fixed offsets and no horizontal scrollbar at the problem width. The bug log records two causes, not one: content-box dimensions made the original row too wide, and absolute positioning prevented the layout from adapting.
