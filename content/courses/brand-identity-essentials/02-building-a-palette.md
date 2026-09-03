@@ -8,7 +8,7 @@ isPreview: false
 
 The first palette file contains seven colours and no usage notes. A designer uses violet for a heading. A developer uses it for a button. Someone else puts pale lilac body text on paper because the combination looks quiet. Every choice comes from taste, so the same colours produce three different systems.
 
-The source values themselves are clear:
+The Sodales source values themselves are clear:
 
 ```css
 --color-obsidian: #111111;
@@ -28,9 +28,10 @@ The audit records each real use instead of rating colours in isolation:
 
 | Element | Foreground | Background | Check |
 | --- | --- | --- | --- |
-| Body copy | Obsidian | Paper | Text contrast |
-| Secondary copy | Graphite | Ivory | Text contrast |
-| Link | Violet | Paper | Normal, hover, focus |
+| Body copy | Obsidian | Ivory | Text contrast |
+| Card copy | Obsidian | Paper | Text contrast |
+| Secondary copy | Graphite | Pale lilac | Text contrast |
+| Link | Violet | Ivory | Normal, hover, focus |
 | Quiet panel | Deep ink | Pale lilac | Text and icons |
 
 Each proposed pair still needs a contrast tool check at its intended size. Grayscale and colour-vision simulations help reveal controls that depend on hue alone.
@@ -39,7 +40,7 @@ Each proposed pair still needs a contrast tool check at its intended size. Grays
 
 ## After: roles people can reuse
 
-The revised file maps the palette to jobs: paper for the main background, ivory for an alternate surface, obsidian for primary text, graphite for secondary text, violet for tested accents, deep ink for dark surfaces, and pale lilac for quiet panels.
+The revised file maps the palette to jobs: ivory for the main background, paper for card and popover surfaces, obsidian for primary text, graphite for secondary text, violet for tested accents, deep ink for dark surfaces, and pale lilac for quiet panels.
 
 It also includes a short handoff list:
 
@@ -48,4 +49,4 @@ It also includes a short handoff list:
 - Error and success labels that do not rely on colour
 - Examples of pale lilac used as a surface rather than small text
 
-The seven hex values have not changed. The after version removes guesswork by showing where each one belongs and which combinations have been checked.
+The seven hex values have not changed. The after version removes guesswork by showing where each one belongs and which check each pairing still needs before it ships.
