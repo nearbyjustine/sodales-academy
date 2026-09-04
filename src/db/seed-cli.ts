@@ -1,8 +1,8 @@
 import { runSeed } from "./seed";
 
 runSeed()
-  .then((result) => {
-    console.log(`Seeded ${result.coursesImported} courses, ${result.lessonsImported} lessons.`);
+  .then(() => {
+    console.log("Admin promoted.");
     process.exit(0);
   })
   .catch((error) => {

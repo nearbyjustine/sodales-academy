@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
 import { MainNav } from "@/components/layout/main-nav";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { SignOutButton } from "@/components/layout/sign-out-button";
 import { getSession } from "@/lib/session";
 
 export async function SiteHeader() {
@@ -18,9 +19,12 @@ export async function SiteHeader() {
         <MainNav showAdmin={showAdmin} />
 
         <div className="flex items-center gap-3">
-          {/* TODO(Task 17): RoleSwitcher read the now-deleted ROLE_COOKIE and is disabled here
-              until it (and set-role.ts) are removed for good. */}
-          {session ? <span>{session.initials}</span> : null}
+          {session ? (
+            <>
+              <span>{session.initials}</span>
+              <SignOutButton />
+            </>
+          ) : null}
           <MobileNav showAdmin={showAdmin} />
         </div>
       </div>

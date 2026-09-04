@@ -1,8 +1,7 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, lesson, userProfile } from "@/db/schema";
-import { loadAllCourses } from "@/lib/content/loader";
+import { userProfile } from "@/db/schema";
 
 // A note on the `import "server-only"` above, for whoever next runs this file directly (not
 // through Next.js): the installed `server-only@0.0.1` package's `exports` map only resolves to
@@ -14,112 +13,17 @@ import { loadAllCourses } from "@/lib/content/loader";
 // every import below throws immediately, before `runSeed` ever runs.
 
 /**
- * One-time migration: import Phase 1's Markdown course fixtures into Postgres, and promote
- * `ADMIN_EMAIL` to `admin`. Safe to re-run — including after a crash mid-course, not just before
- * any insert has happened.
+ * Promotes `ADMIN_EMAIL` to `admin`. Safe to re-run.
  *
- * NOT wrapped in `db.transaction(...)`, despite spec §7 describing "a single transaction" —
- * `src/db/index.ts` connects via `drizzle-orm/neon-http`, and that driver's `NeonHttpSession`
- * throws `"No transactions support in neon-http driver"` synchronously the moment `.transaction()`
- * is called (`node_modules/drizzle-orm/neon-http/session.cjs`, confirmed by reading the compiled
- * session class — not just the `.d.ts`, since the type signature alone doesn't reveal the runtime
- * throw). `drizzle-kit`'s own migrator docs carry the same caveat for this driver.
- *
- * Because there's no transaction, a crash between two inserts is a real possibility (e.g. after a
- * course row and 2 of its 3 modules land, before the third module's lessons do), so idempotency is
- * enforced at every level, not just per-course: `getOrCreateCourse`/`getOrCreateModule` check for
- * an existing row before inserting, and the lesson insert leans on `lesson`'s real
- * `unique(course_id, slug)` constraint via `onConflictDoNothing()`. A re-run after a partial crash
- * resumes and fills in whatever's missing, rather than seeing the course row exists and skipping
- * the rest of it.
+ * This used to also do a one-time migration of Phase 1's Markdown course fixtures into Postgres
+ * (`content/` → `course`/`course_module`/`lesson`, via `loadAllCourses`). That migration ran for
+ * real once (Task 17, Step 1) and its output is now permanent data in this database; the
+ * migration code itself was deleted along with `content/` and the loader in the same task, since
+ * its only caller was about to stop existing. What's left here is just the admin-promotion half,
+ * kept for any future admin-promotion needs (e.g. re-running after `ADMIN_EMAIL` changes).
  */
-export async function runSeed(): Promise<{ coursesImported: number; lessonsImported: number }> {
+export async function runSeed(): Promise<void> {
   await promoteAdmin();
-  const instructorUserId = await resolveInstructorUserId();
-
-  const courses = await loadAllCourses();
-  let coursesImported = 0;
-  let lessonsImported = 0;
-
-  for (const c of courses) {
-    const { id: courseId, wasCreated } = await getOrCreateCourse(c, instructorUserId);
-    if (wasCreated) coursesImported++;
-
-    for (const m of c.modules) {
-      const moduleId = await getOrCreateModule(courseId, m);
-
-      for (const l of m.lessons) {
-        const [insertedLesson] = await db
-          .insert(lesson)
-          .values({
-            moduleId,
-            courseId,
-            slug: l.slug,
-            title: l.title,
-            content: l.content,
-            position: l.position,
-            isPreview: l.isPreview,
-          })
-          .onConflictDoNothing() // idempotent — backed by lesson's unique(course_id, slug)
-          .returning({ id: lesson.id });
-        if (insertedLesson) lessonsImported++;
-      }
-    }
-  }
-
-  return { coursesImported, lessonsImported };
-}
-
-async function getOrCreateCourse(
-  c: Awaited<ReturnType<typeof loadAllCourses>>[number],
-  instructorUserId: string,
-): Promise<{ id: string; wasCreated: boolean }> {
-  const [existing] = await db.select({ id: course.id }).from(course).where(eq(course.slug, c.slug));
-  if (existing) return { id: existing.id, wasCreated: false };
-
-  const [insertedCourse] = await db
-    .insert(course)
-    .values({
-      slug: c.slug,
-      title: c.title,
-      description: c.description,
-      category: c.category,
-      level: c.level,
-      status: c.status,
-      instructorUserId,
-    })
-    .returning();
-  return { id: insertedCourse.id, wasCreated: true };
-}
-
-async function getOrCreateModule(
-  courseId: string,
-  m: { title: string; position: number },
-): Promise<string> {
-  // course_module has no unique constraint to back onConflictDoNothing() — the loader guarantees
-  // module titles are unique within a course (they're the grouping key lessons are bucketed by),
-  // so an explicit existence check on (courseId, title) is the equivalent idempotency guard.
-  const [existing] = await db
-    .select({ id: courseModule.id })
-    .from(courseModule)
-    .where(and(eq(courseModule.courseId, courseId), eq(courseModule.title, m.title)));
-  if (existing) return existing.id;
-
-  const [insertedModule] = await db
-    .insert(courseModule)
-    .values({ courseId, title: m.title, position: m.position })
-    .returning();
-  return insertedModule.id;
-}
-
-/**
- * Every migrated course defaults to `ADMIN_EMAIL`'s Neon Auth user id (spec §7 step 3) —
- * reassignable afterward through the edit form. Looked up fresh (not cached from `promoteAdmin`)
- * so this function stays independently correct if ever called on its own.
- */
-async function resolveInstructorUserId(): Promise<string> {
-  const { id } = await findAdminAuthUser();
-  return id;
 }
 
 /**
