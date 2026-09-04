@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -58,7 +59,16 @@ function initialsFor(name: string): string {
  * is not the same as this app granting them access.
  */
 
-export async function getSession(): Promise<Session | null> {
+/**
+ * React-cached (spec §6) — a single request/render can call this 2-3 times (`SiteHeader`, the page
+ * itself via `requireUser`/`requireRole`, `getEnrollments`), and without `cache()` each call issued
+ * a fresh `auth.getSession()` network round-trip plus a `user_profile` query. `cache()` here is
+ * React's request-scoped memoization for Server Components — it dedupes repeated calls within the
+ * same render, not across requests/users; outside a `react-server` bundling context (e.g. this
+ * file's own Vitest tests) `cache()` is a no-op passthrough (`node_modules/react/cjs/react.development.js`),
+ * so it changes no observable behavior there.
+ */
+export const getSession = cache(async function getSession(): Promise<Session | null> {
   const { data } = await auth.getSession();
   const user = data?.user;
   if (!user) return null;
@@ -110,7 +120,7 @@ export async function getSession(): Promise<Session | null> {
     initials: initialsFor(user.name),
     role: "learner",
   };
-}
+});
 
 export async function requireUser(): Promise<Session> {
   const session = await getSession();

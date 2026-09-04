@@ -1,24 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, userProfile } from "@/db/schema";
 import type { Session } from "@/lib/session";
 
 /**
- * `queries.ts`'s `getLesson` now imports `assertCanManageCourse` from `./mutations` (the
- * admin/instructor bypass added alongside the enrollment gate), which imports `requireRole` from
- * `@/lib/session`, which imports the real `@neondatabase/auth@0.5.0-beta` package — that package's
- * compiled output does a bare `import { cookies, headers } from "next/headers"` that Node's strict
- * ESM loader can't resolve outside Next's own bundler (same failure `mutations.test.ts` and
- * `session.test.ts` document and mock around). None of this file's tests call `requireRole` or
- * exercise auth — they only need the module graph to load — so this is the exact same mitigation,
- * and it leaves `@/db` real and unmocked, same as every other test in this file.
+ * `queries.ts`'s `getLesson` imports `canManageCourse` from `./authz` (the admin/instructor bypass
+ * added alongside the enrollment gate). `./authz` only imports `@/db`, `@/db/schema`, and
+ * `type Session` from `@/lib/session` (type-only, erased at compile time) — it never transitively
+ * pulls in the real `@neondatabase/auth@0.5.0-beta` package the way importing the runtime
+ * `@/lib/session` module would, so this file doesn't need the `@/lib/auth/server` mock that
+ * `authz.test.ts`/`session.test.ts` document for files that DO import `@/lib/session` at runtime.
+ * `@/db` stays real and unmocked, same as every other test in this file.
  */
-vi.mock("@/lib/auth/server", () => ({ auth: { getSession: vi.fn() } }));
-
-const { getCourses, getCourseBySlug, getLesson, getCatalogStats } = await import("./queries");
+const { getCourses, getCourseBySlug, getLesson, getCatalogStats, getAllCourses } =
+  await import("./queries");
 
 const TEST_INSTRUCTOR = "test-instructor-id";
+const TEST_INSTRUCTOR_2 = "queries-test-instructor-2";
 const TEST_LEARNER = "queries-test-enrolled-learner";
 
 function testViewer(userId: string, role: Session["role"]): Session {
@@ -28,8 +27,23 @@ function testViewer(userId: string, role: Session["role"]): Session {
 beforeAll(async () => {
   await db
     .insert(userProfile)
-    .values({ userId: TEST_INSTRUCTOR, name: "Test Instructor", role: "instructor" })
+    .values([
+      { userId: TEST_INSTRUCTOR, name: "Test Instructor", role: "instructor" },
+      { userId: TEST_INSTRUCTOR_2, name: "Queries Test Instructor Two", role: "instructor" },
+    ])
     .onConflictDoNothing();
+
+  await db
+    .insert(course)
+    .values({
+      slug: "queries-test-instructor-2-course",
+      title: "Queries Test Instructor Two's Course",
+      description: "A course owned by a different instructor, for getAllCourses scoping tests.",
+      category: "Testing",
+      level: "beginner",
+      status: "draft",
+      instructorUserId: TEST_INSTRUCTOR_2,
+    });
 
   const [publishedCourse] = await db
     .insert(course)
@@ -89,7 +103,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.delete(course).where(eq(course.slug, "queries-test-course"));
   await db.delete(course).where(eq(course.slug, "queries-test-draft"));
+  await db.delete(course).where(eq(course.slug, "queries-test-instructor-2-course"));
   await db.delete(userProfile).where(eq(userProfile.userId, TEST_INSTRUCTOR));
+  await db.delete(userProfile).where(eq(userProfile.userId, TEST_INSTRUCTOR_2));
 });
 
 describe("getCourses", () => {
@@ -201,5 +217,28 @@ describe("getCatalogStats", () => {
     const stats = await getCatalogStats();
     const before = stats.courses;
     expect(before).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("getAllCourses", () => {
+  it("scopes an instructor's listing to only their own courses", async () => {
+    const courses = await getAllCourses(testViewer(TEST_INSTRUCTOR, "instructor"));
+    expect(courses.some((c) => c.slug === "queries-test-course")).toBe(true);
+    expect(courses.some((c) => c.slug === "queries-test-draft")).toBe(true);
+    expect(courses.some((c) => c.slug === "queries-test-instructor-2-course")).toBe(false);
+  });
+
+  it("scopes a different instructor's listing to only their own courses", async () => {
+    const courses = await getAllCourses(testViewer(TEST_INSTRUCTOR_2, "instructor"));
+    expect(courses.some((c) => c.slug === "queries-test-instructor-2-course")).toBe(true);
+    expect(courses.some((c) => c.slug === "queries-test-course")).toBe(false);
+    expect(courses.some((c) => c.slug === "queries-test-draft")).toBe(false);
+  });
+
+  it("lets an admin see every instructor's courses, including drafts", async () => {
+    const courses = await getAllCourses(testViewer("queries-test-admin", "admin"));
+    expect(courses.some((c) => c.slug === "queries-test-course")).toBe(true);
+    expect(courses.some((c) => c.slug === "queries-test-draft")).toBe(true);
+    expect(courses.some((c) => c.slug === "queries-test-instructor-2-course")).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { eq, and, or, ilike, asc, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
 import type { Session } from "@/lib/session";
-import { assertCanManageCourse } from "./mutations";
+import { canManageCourse } from "./authz";
 import type { CourseDetail, CourseModule, CourseSummary, Lesson, Level } from "./types";
 
 export type LessonRef = { courseSlug: string; slug: string; title: string };
@@ -56,8 +56,18 @@ export async function getCourseBySlugForAdmin(slug: string): Promise<CourseDetai
   return toDetail(row);
 }
 
-export async function getAllCourses(): Promise<CourseSummary[]> {
-  const rows = await db.select().from(course);
+/**
+ * Admin/instructor course listing (spec §8's ownership invariant applies to the LISTING, not just
+ * the mutations behind it): an admin sees every course; an instructor sees only courses whose
+ * `instructor_user_id` is their own. Without this filter an instructor could see every peer's
+ * course titles/categories/statuses, including unpublished drafts, even though they could never
+ * actually act on them.
+ */
+export async function getAllCourses(viewer: Session): Promise<CourseSummary[]> {
+  const rows =
+    viewer.role === "admin"
+      ? await db.select().from(course)
+      : await db.select().from(course).where(eq(course.instructorUserId, viewer.userId));
   return Promise.all(rows.map((r) => toSummaryWithCount(r)));
 }
 
@@ -95,21 +105,6 @@ export async function getLesson(
     prev: index > 0 ? toRef(flat[index - 1]) : null,
     next: index < flat.length - 1 ? toRef(flat[index + 1]) : null,
   };
-}
-
-/**
- * Wraps `assertCanManageCourse` (Task 9, `./mutations`) as a boolean check: it throws on failure
- * rather than returning one. Reusing it here (spec §8: "Draft visibility, edit, publish/unpublish,
- * delete, and lesson access all reuse this same rule") lets an admin or the course's own instructor
- * open a non-preview lesson for review/authoring without first self-enrolling.
- */
-async function canManageCourse(courseId: string, viewer: Session): Promise<boolean> {
-  try {
-    await assertCanManageCourse(courseId, viewer);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function withoutLessonContent(modules: CourseModule[]): CourseModule[] {

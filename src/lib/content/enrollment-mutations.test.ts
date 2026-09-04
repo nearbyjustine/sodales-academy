@@ -37,6 +37,7 @@ const { enrollInCourse, toggleLessonComplete } = await import("./mutations");
 
 const TEST_INSTRUCTOR = "enrollment-mutations-test-instructor";
 const TEST_LEARNER = "enrollment-mutations-test-learner";
+const TEST_UNAUTHORIZED_LEARNER = "enrollment-mutations-test-unauthorized-learner";
 const TEST_SLUG = "enrollment-mutations-test-course";
 
 let testCourseId: string;
@@ -128,7 +129,7 @@ describe("enrollInCourse", () => {
 describe("toggleLessonComplete", () => {
   it("marks a lesson complete on first toggle, inserting a real lesson_progress row", async () => {
     const result = await toggleLessonComplete(testLessonId);
-    expect(result).toEqual({ complete: true });
+    expect(result).toEqual({ ok: true, complete: true });
 
     const rows = await db
       .select()
@@ -139,12 +140,45 @@ describe("toggleLessonComplete", () => {
 
   it("marks it incomplete again on the second toggle, deleting the row", async () => {
     const result = await toggleLessonComplete(testLessonId);
-    expect(result).toEqual({ complete: false });
+    expect(result).toEqual({ ok: true, complete: false });
 
     const rows = await db
       .select()
       .from(lessonProgress)
       .where(and(eq(lessonProgress.lessonId, testLessonId), eq(lessonProgress.userId, TEST_LEARNER)));
     expect(rows).toHaveLength(0);
+  });
+
+  it("rejects an unenrolled, non-managing user and does not insert a lesson_progress row", async () => {
+    mockRequireUser.mockResolvedValue({
+      userId: TEST_UNAUTHORIZED_LEARNER,
+      name: "Unauthorized Learner",
+      email: "unauthorized@enrollment-mutations-test.example",
+      initials: "UL",
+      role: "learner",
+    });
+
+    const result = await toggleLessonComplete(testLessonId);
+    expect(result.ok).toBe(false);
+
+    const rows = await db
+      .select()
+      .from(lessonProgress)
+      .where(
+        and(
+          eq(lessonProgress.lessonId, testLessonId),
+          eq(lessonProgress.userId, TEST_UNAUTHORIZED_LEARNER),
+        ),
+      );
+    expect(rows).toHaveLength(0);
+
+    // Restore the enrolled learner as the "logged in" viewer for any tests that run after this one.
+    mockRequireUser.mockResolvedValue({
+      userId: TEST_LEARNER,
+      name: "Test Learner",
+      email: "learner@enrollment-mutations-test.example",
+      initials: "TL",
+      role: "learner",
+    });
   });
 });

@@ -13,11 +13,13 @@ import {
 } from "@/components/ui/table";
 import { CourseRowActions } from "@/components/admin/course-row-actions";
 import { getAllCourses } from "@/lib/content/queries";
+import { requireRole } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Courses" };
 
 export default async function AdminCoursesPage() {
-  const courses = await getAllCourses();
+  const session = await requireRole("instructor", "admin");
+  const courses = await getAllCourses(session);
 
   return (
     <div className="p-6 lg:p-10">

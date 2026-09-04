@@ -19,6 +19,10 @@ export function CompleteToggle({
   function handleToggle() {
     startTransition(async () => {
       const result = await toggleLessonComplete(lessonId);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
       setComplete(result.complete);
       toast.success(result.complete ? "Lesson marked complete" : "Lesson marked incomplete");
     });

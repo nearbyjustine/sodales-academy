@@ -5,20 +5,14 @@ vi.mock("@/db", () => ({
   db: { select: () => ({ from: () => ({ where: () => mockSelect() }) }) },
 }));
 
-// `mutations.ts` imports `requireRole` from `@/lib/session`, which imports `auth` from
-// `@/lib/auth/server`, which imports the real `@neondatabase/auth@0.5.0-beta` package. That
-// package's compiled output does `import { cookies, headers } from "next/headers"` — a bare
-// specifier the installed `next@16.3.4` (no `exports` map) can't resolve under Node's strict ESM
-// loader outside Next's own bundler. Confirmed independent of Vitest: `node -e "import(...)"`
-// against the compiled `dist/next/server/index.mjs` throws the identical
-// `Cannot find module '.../next/headers'` error with no test framework involved at all. None of
-// these 5 tests call `requireRole`/exercise auth — they only need the module graph to load — so
-// this mirrors the exact mitigation `src/lib/session.test.ts` already uses for the same package.
-vi.mock("@/lib/auth/server", () => ({
-  auth: { getSession: vi.fn() },
-}));
-
-const { assertCanManageCourse } = await import("./mutations");
+// `assertCanManageCourse` now lives in `./authz` (moved out of `./mutations` because that file's
+// top-of-file `"use server"` directive made the authorization function itself a POST-reachable
+// Server Action — see `./authz`'s own doc comment). `./authz` only imports `@/db`, `@/db/schema`,
+// and `type Session` from `@/lib/session` (type-only, erased at compile time), so — unlike
+// `./mutations` — it never transitively pulls in `@neondatabase/auth`'s bare `next/headers` import
+// that `src/lib/session.test.ts`/`enrollment-mutations.test.ts` document workarounds for. No auth
+// mock needed here anymore.
+const { assertCanManageCourse } = await import("./authz");
 
 beforeEach(() => {
   mockSelect.mockReset();

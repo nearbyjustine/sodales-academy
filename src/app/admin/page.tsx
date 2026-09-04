@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getAllCourses } from "@/lib/content/queries";
+import { requireRole } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Overview" };
 
 export default async function AdminOverviewPage() {
-  const courses = await getAllCourses();
+  const session = await requireRole("instructor", "admin");
+  const courses = await getAllCourses(session);
   const published = courses.filter((c) => c.status === "published");
   const drafts = courses.filter((c) => c.status === "draft");
 

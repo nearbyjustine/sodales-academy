@@ -17,10 +17,5 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     include: ["src/**/*.test.{ts,tsx}"],
-    // Node 26's native localStorage shadows jsdom's; without a backing file it's
-    // silently undefined instead of the jsdom Storage implementation tests expect.
-    env: {
-      NODE_OPTIONS: "--localstorage-file=node_modules/.cache/vitest-localstorage",
-    },
   },
 });
