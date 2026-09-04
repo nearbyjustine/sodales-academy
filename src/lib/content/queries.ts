@@ -330,10 +330,23 @@ export async function getTrackBySlug(
   if (links.length === 0) return { ...summary, courses: [] };
 
   const courseIds = links.map((l) => l.courseId);
+  const showDrafts = canSeeDraftTracks(viewer);
 
+  // Same rule `getCourseBySlug`/`getCourses` apply to the public catalog: a
+  // DRAFT course must never surface its title/description/category/lessonCount
+  // outside admin preview — even when an admin has linked it into an otherwise
+  // PUBLISHED track. Filtered here in SQL (not by trimming the array afterward)
+  // so the query count doesn't change regardless of how many courses a track has.
   // Reuses the existing batched helper — one grouped lesson count and one
   // instructor-name lookup for the whole set, not per course.
-  const courseRows = await db.select().from(course).where(inArray(course.id, courseIds));
+  const courseRows = await db
+    .select()
+    .from(course)
+    .where(
+      showDrafts
+        ? inArray(course.id, courseIds)
+        : and(inArray(course.id, courseIds), eq(course.status, "published")),
+    );
   const summaries = await toSummariesWithCounts(courseRows);
   const summaryById = new Map(summaries.map((s) => [s.id, s]));
 
@@ -356,5 +369,16 @@ export async function getTrackBySlug(
     return [{ ...s, position: link.position, completedLessonCount: completionByCourseId.get(link.courseId) ?? 0 }];
   });
 
-  return { ...summary, courses };
+  // `toTrackSummaries`'s `courseCount`/`lessonCount` aggregate every linked
+  // course regardless of status — for a non-admin viewer that would disagree
+  // with `courses` above (e.g. "3 courses" alongside only 2 listed), which is
+  // worse than either number alone. Recomputed here from the same filtered set
+  // backing `courses` so the two always agree; free of extra queries since
+  // `courses`/`summaries` are already in hand. For an admin (who sees every
+  // linked course including drafts) this recomputation lands on the same value
+  // the unfiltered aggregate would have produced anyway.
+  const courseCount = courses.length;
+  const lessonCount = courses.reduce((sum, c) => sum + c.lessonCount, 0);
+
+  return { ...summary, courseCount, lessonCount, courses };
 }
