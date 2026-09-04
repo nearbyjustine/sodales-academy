@@ -1,10 +1,10 @@
 "use server";
 
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { course, courseModule, lesson, userProfile } from "@/db/schema";
-import { requireRole, type Session } from "@/lib/session";
+import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
+import { requireRole, requireUser, type Session } from "@/lib/session";
 import { courseInputSchema, type CourseInput } from "@/lib/validation";
 
 export async function assertCanManageCourse(courseId: string, viewer: Session): Promise<void> {
@@ -173,4 +173,36 @@ export async function listInstructors(): Promise<{ userId: string; name: string 
     .from(userProfile)
     .where(or(eq(userProfile.role, "instructor"), eq(userProfile.role, "admin")));
   return rows;
+}
+
+export async function enrollInCourse(courseSlug: string): Promise<MutationResult> {
+  const viewer = await requireUser();
+
+  const [row] = await db.select({ id: course.id }).from(course).where(eq(course.slug, courseSlug));
+  if (!row) return { ok: false, message: "Course not found." };
+
+  await db.insert(enrollment).values({ courseId: row.id, userId: viewer.userId }).onConflictDoNothing();
+
+  revalidatePath(`/courses/${courseSlug}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function toggleLessonComplete(lessonId: string): Promise<{ complete: boolean }> {
+  const viewer = await requireUser();
+
+  const [existing] = await db
+    .select({ id: lessonProgress.id })
+    .from(lessonProgress)
+    .where(and(eq(lessonProgress.lessonId, lessonId), eq(lessonProgress.userId, viewer.userId)));
+
+  if (existing) {
+    await db.delete(lessonProgress).where(eq(lessonProgress.id, existing.id));
+    revalidatePath("/dashboard");
+    return { complete: false };
+  }
+
+  await db.insert(lessonProgress).values({ lessonId, userId: viewer.userId }).onConflictDoNothing();
+  revalidatePath("/dashboard");
+  return { complete: true };
 }
