@@ -107,7 +107,27 @@ reality, not an enforced boundary.
   contrast there; use the accessible tint `#887bd8` (`text-violet-accessible`) for text/controls on
   dark surfaces instead.
 - **The wordmark renders only through `<BrandWordmark />`**, never as live text. Brand guidelines
-  require it ship as artwork; setting it as text bypasses that requirement invisibly.
+  require it ship as artwork; setting it as text bypasses that requirement invisibly. It takes
+  `tone` ("light"/"dark" — the graphite wordmark is illegible on Obsidian, so the footer and the
+  intro use the reversed artwork) and `part` ("lockup"/"wordmark" — the wordmark half alone, for
+  the intro, which draws the mark itself as SVG). All four PNGs in `public/brand/` are tight-cropped
+  from the supplied `assets/*.png` 500x220 canvases so `h-*` controls the real logo height.
+- **The MARK is separate from the wordmark and may be drawn as SVG.** `<SodalesMark />` is the
+  traced-from-`mark.png` vector, four paths tagged `data-piece` so the intro can move each along its
+  own axis. The wordmark rule above is about the *wordmark*; the mark is geometry, not lettering.
+- **26.2° is the brand's shear axis, measured off the artwork, not invented** (`MARK_SHEAR` in
+  `src/lib/brand/course-artwork.ts`). Course cover art and the intro's screen-parting cut both use
+  it. When expressing it in CSS, the horizontal run must be measured against viewport *height*
+  (`24.5vh`), never a percentage of the element — a percentage makes the angle drift with the
+  aspect ratio and it stops matching the logo.
+- **The intro is gated server-side by the `sodales_intro` cookie, from the ROOT layout.** Anything
+  rendered inside a nested layout sits behind `app/loading.tsx`'s Suspense boundary, so the ivory
+  skeleton flashes before the intro paints. `INTRO_COOKIE` lives in `src/lib/brand/intro-cookie.ts`
+  and not in the `"use client"` component, because importing a constant from a client module into a
+  Server Component yields a client *reference*, not the string — which silently made the gate always
+  false. The animation is pure CSS with `forwards` fill so it clears itself without JS; reduced
+  motion gets `display: none` (the global reduced-motion rule zeroes durations but not delays,
+  which would otherwise leave a static black screen for the full timeline).
 - **Next 16: `params`, `searchParams`, and `cookies()` are async.** `await` them. This is a
   breaking change from Next 15 and earlier training data — code that destructures them
   synchronously fails to compile.
@@ -178,7 +198,12 @@ each one hits.
 | `src/lib/session.ts` | `getSession` (React-cached)/`requireUser`/`requireRole`/`getEnrollments`, real Neon Auth + `user_profile` |
 | `src/lib/lesson-progress.ts` | Pure helpers over server-fetched completion data — no `localStorage`, no client-only state |
 | `src/lib/validation.ts` | zod schemas (`courseInputSchema`, `signUpSchema`, `signInSchema`) — `courseInputSchema` carries `instructorUserId`, server-overwritten when the submitter is an instructor |
-| `src/components/brand/brand-wordmark.tsx` | The only place the wordmark is rendered |
+| `src/lib/brand/course-artwork.ts` | Pure, slug-seeded cover geometry on the mark's 26.2° shear axis — same course always gets the same cover |
+| `src/lib/brand/intro-cookie.ts` | `INTRO_COOKIE` — plain module so the Server Component gate gets the string, not a client reference |
+| `src/components/brand/brand-wordmark.tsx` | The only place the wordmark is rendered (`tone`, `part`) |
+| `src/components/brand/sodales-mark.tsx` | The mark as inline SVG, traced from `mark.png`; `data-piece` per path drives the intro |
+| `src/components/brand/course-artwork.tsx` | Renders `courseArtwork()` — decorative, `aria-hidden`, used on hero/rows/detail/dashboard |
+| `src/components/brand/brand-intro.tsx` / `brand-intro-gate.tsx` | The intro overlay and its server-side cookie gate (mounted in the ROOT layout) |
 | `src/components/layout/` | Header, footer, nav, sign-out button (no more role switcher) |
 | `src/components/course/` | Course row, outline, dashboard cards/stats, enroll button |
 | `src/components/lesson/` | Markdown body, sidebar, `complete-toggle.tsx` (branches on `result.ok`, toasts the real error on failure) |

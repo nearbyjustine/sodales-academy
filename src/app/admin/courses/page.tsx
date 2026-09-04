@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { FolderOpenIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import {
   Table,
   TableBody,
@@ -25,7 +24,7 @@ export default async function AdminCoursesPage() {
     <div className="p-6 lg:p-10">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Courses</h1>
-        <Button render={<Link href="/admin/courses/new" />}>New course</Button>
+        <ButtonLink href="/admin/courses/new">New course</ButtonLink>
       </div>
 
       {courses.length === 0 ? (
@@ -35,7 +34,7 @@ export default async function AdminCoursesPage() {
           <p className="max-w-sm text-graphite">
             Courses you create will show up here.
           </p>
-          <Button render={<Link href="/admin/courses/new" />}>New course</Button>
+          <ButtonLink href="/admin/courses/new">New course</ButtonLink>
         </div>
       ) : (
         <div className="mt-8 rounded-md border border-border">

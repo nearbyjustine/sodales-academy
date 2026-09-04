@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 
 export default function NotFound() {
   return (
@@ -9,10 +8,10 @@ export default function NotFound() {
         The page you&apos;re looking for doesn&apos;t exist or may have moved.
       </p>
       <div className="flex gap-3">
-        <Button render={<Link href="/courses" />}>Browse courses</Button>
-        <Button variant="outline" render={<Link href="/" />}>
+        <ButtonLink href="/courses">Browse courses</ButtonLink>
+        <ButtonLink variant="outline" href="/">
           Home
-        </Button>
+        </ButtonLink>
       </div>
     </div>
   );

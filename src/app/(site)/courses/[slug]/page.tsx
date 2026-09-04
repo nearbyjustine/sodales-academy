@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CourseArtwork } from "@/components/brand/course-artwork";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { CourseOutline } from "@/components/course/course-outline";
 import { EnrollButton } from "@/components/course/enroll-button";
 import { getCompletedLessonIds, getCourseBySlug, isEnrolled } from "@/lib/content/queries";
@@ -31,9 +31,9 @@ export default async function CoursePage({ params }: PageProps) {
 
   if (!session) {
     cta = (
-      <Button className="mt-6" render={<Link href="/login" />}>
+      <ButtonLink className="mt-6" href="/login">
         Sign in to enroll
-      </Button>
+      </ButtonLink>
     );
   } else {
     const enrolled = await isEnrolled(course.id, session.userId);
@@ -51,15 +51,23 @@ export default async function CoursePage({ params }: PageProps) {
       const label = completed.size === 0 ? "Start learning" : "Continue learning";
 
       cta = (
-        <Button className="mt-6" render={<Link href={`/learn/${course.slug}/${target.slug}`} />}>
+        <ButtonLink className="mt-6" href={`/learn/${course.slug}/${target.slug}`}>
           {label}
-        </Button>
+        </ButtonLink>
       );
     }
   }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
+      <div className="mb-10 h-40 overflow-hidden rounded-md md:h-56">
+        <CourseArtwork
+          seed={course.slug}
+          lessonCount={course.modules.reduce((n, m) => n + m.lessons.length, 0)}
+          ratio="wide"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="capitalize">
           {course.level}

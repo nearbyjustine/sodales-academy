@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { MainNav } from "@/components/layout/main-nav";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { SignOutButton } from "@/components/layout/sign-out-button";
@@ -31,9 +31,9 @@ export async function SiteHeader() {
               <SignOutButton />
             </>
           ) : (
-            <Button variant="outline" size="sm" render={<Link href="/login" />}>
+            <ButtonLink variant="outline" size="sm" href="/login">
               Sign in
-            </Button>
+            </ButtonLink>
           )}
           <MobileNav showAdmin={showAdmin} />
         </div>

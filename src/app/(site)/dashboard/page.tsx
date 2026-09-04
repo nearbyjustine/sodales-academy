@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { BookOpenIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { DashboardStats } from "@/components/course/dashboard-stats";
 import { EnrolledCourseCard } from "@/components/course/enrolled-course-card";
 import { getCompletedLessonIds, getCourseBySlug } from "@/lib/content/queries";
@@ -42,7 +41,7 @@ export default async function DashboardPage() {
         <div className="flex flex-col items-center gap-4 py-24 text-center">
           <BookOpenIcon aria-hidden="true" className="size-10 text-graphite" />
           <h2 className="text-xl font-bold">You haven&apos;t enrolled in anything yet</h2>
-          <Button render={<Link href="/courses" />}>Browse courses</Button>
+          <ButtonLink href="/courses">Browse courses</ButtonLink>
         </div>
       ) : (
         <>

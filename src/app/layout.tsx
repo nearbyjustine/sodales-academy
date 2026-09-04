@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { BrandIntroGate } from "@/components/brand/brand-intro-gate";
 import "./globals.css";
 
 const inter = Inter({
@@ -25,6 +26,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="antialiased">
+        {/* Sibling of {children}, not nested inside it: everything below this
+            point sits behind `app/loading.tsx`'s Suspense boundary, so an intro
+            mounted in a nested layout only paints AFTER the ivory skeleton has
+            already flashed. */}
+        <BrandIntroGate />
         {children}
         <Toaster richColors position="top-right" />
       </body>

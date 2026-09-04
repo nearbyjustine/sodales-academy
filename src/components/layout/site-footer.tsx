@@ -7,7 +7,7 @@ export function SiteFooter() {
     <footer className="bg-obsidian py-16 text-ivory">
       <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4 md:flex-row md:justify-between">
         <div className="max-w-sm space-y-4">
-          <BrandWordmark />
+          <BrandWordmark tone="dark" />
           <p className="text-sm text-ivory/70">
             SODALES is a modern creative intelligence collective where strategy, design &
             technology converge.

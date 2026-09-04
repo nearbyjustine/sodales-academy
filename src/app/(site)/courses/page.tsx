@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { SearchXIcon } from "lucide-react";
 import { CatalogFilters } from "@/components/course/catalog-filters";
 import { CourseRow } from "@/components/course/course-row";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { getCourses } from "@/lib/content/queries";
 import { LEVELS, type Level } from "@/lib/content/types";
 
@@ -40,9 +39,9 @@ export default async function CoursesPage({ searchParams }: PageProps) {
           <p className="max-w-sm text-graphite">
             Try a different search term or clear your filters to see the full catalog.
           </p>
-          <Button variant="outline" render={<Link href="/courses" />}>
+          <ButtonLink variant="outline" href="/courses">
             Clear filters
-          </Button>
+          </ButtonLink>
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-4">

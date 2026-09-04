@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { getAllCourses } from "@/lib/content/queries";
 import { requireRole } from "@/lib/session";
 
@@ -33,10 +32,10 @@ export default async function AdminOverviewPage() {
       </div>
 
       <div className="mt-8 flex gap-3">
-        <Button render={<Link href="/admin/courses/new" />}>New course</Button>
-        <Button variant="outline" render={<Link href="/admin/courses" />}>
+        <ButtonLink href="/admin/courses/new">New course</ButtonLink>
+        <ButtonLink variant="outline" href="/admin/courses">
           All courses
-        </Button>
+        </ButtonLink>
       </div>
     </div>
   );

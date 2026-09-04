@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { LessonBody } from "@/components/lesson/lesson-body";
 import { LessonSidebar } from "@/components/lesson/lesson-sidebar";
 import { CompleteToggle } from "@/components/lesson/complete-toggle";
@@ -62,12 +63,9 @@ export default async function LessonPage({ params }: PageProps) {
 
           <div className="mt-10 flex items-center justify-between gap-4 border-t border-border pt-6">
             {lesson.prev ? (
-              <Button
-                variant="outline"
-                render={<Link href={`/learn/${lesson.prev.courseSlug}/${lesson.prev.slug}`} />}
-              >
+              <ButtonLink variant="outline" href={`/learn/${lesson.prev.courseSlug}/${lesson.prev.slug}`}>
                 <ChevronLeftIcon /> {lesson.prev.title}
-              </Button>
+              </ButtonLink>
             ) : (
               <Button variant="outline" disabled>
                 <ChevronLeftIcon /> Previous
@@ -75,9 +73,9 @@ export default async function LessonPage({ params }: PageProps) {
             )}
 
             {lesson.next ? (
-              <Button render={<Link href={`/learn/${lesson.next.courseSlug}/${lesson.next.slug}`} />}>
+              <ButtonLink href={`/learn/${lesson.next.courseSlug}/${lesson.next.slug}`}>
                 {lesson.next.title} <ChevronRightIcon />
-              </Button>
+              </ButtonLink>
             ) : (
               <Button disabled>
                 Next <ChevronRightIcon />
