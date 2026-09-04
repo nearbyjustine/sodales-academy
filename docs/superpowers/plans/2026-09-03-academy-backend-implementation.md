@@ -1151,7 +1151,7 @@ git commit -m "feat: create user_profile on sign-up, gated by a verified invite 
 - Create: `src/lib/content/queries.test.ts` (replaces the Phase 1 version)
 
 **Interfaces:**
-- Consumes: `db`, `course`, `courseModule`, `lesson` (Tasks 1-2)
+- Consumes: `db`, `course`, `courseModule`, `lesson`, `userProfile` (Tasks 1-2)
 - Produces: same exported signatures as Phase 1 —
   `getCourses(filters?)`, `getCourseBySlug(slug)`, `getLesson(courseSlug, lessonSlug)`,
   `getCatalogStats()`, `getAllCourses()` — every page already calls these unchanged
@@ -1165,12 +1165,17 @@ under test. Create `src/lib/content/queries.test.ts`:
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, lesson } from "@/db/schema";
+import { course, courseModule, lesson, userProfile } from "@/db/schema";
 import { getCourses, getCourseBySlug, getLesson, getCatalogStats } from "./queries";
 
 const TEST_INSTRUCTOR = "test-instructor-id";
 
 beforeAll(async () => {
+  await db
+    .insert(userProfile)
+    .values({ userId: TEST_INSTRUCTOR, name: "Test Instructor", role: "instructor" })
+    .onConflictDoNothing();
+
   const [publishedCourse] = await db
     .insert(course)
     .values({
@@ -1227,6 +1232,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.delete(course).where(eq(course.slug, "queries-test-course"));
   await db.delete(course).where(eq(course.slug, "queries-test-draft"));
+  await db.delete(userProfile).where(eq(userProfile.userId, TEST_INSTRUCTOR));
 });
 
 describe("getCourses", () => {
@@ -1234,6 +1240,12 @@ describe("getCourses", () => {
     const courses = await getCourses();
     expect(courses.some((c) => c.slug === "queries-test-course")).toBe(true);
     expect(courses.some((c) => c.slug === "queries-test-draft")).toBe(false);
+  });
+
+  it("resolves the instructor's real name via a user_profile join", async () => {
+    const courses = await getCourses();
+    const target = courses.find((c) => c.slug === "queries-test-course");
+    expect(target!.instructorName).toBe("Test Instructor");
   });
 });
 
@@ -1287,7 +1299,7 @@ signature:
 import "server-only";
 import { eq, and, or, ilike, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, lesson } from "@/db/schema";
+import { course, courseModule, lesson, userProfile } from "@/db/schema";
 import type { CourseDetail, CourseModule, CourseSummary, Lesson, Level } from "./types";
 
 export type LessonRef = { courseSlug: string; slug: string; title: string };
@@ -1376,6 +1388,14 @@ async function countLessons(courseId: string): Promise<number> {
   return rows.length;
 }
 
+async function resolveInstructorName(instructorUserId: string): Promise<string> {
+  const [profile] = await db
+    .select({ name: userProfile.name })
+    .from(userProfile)
+    .where(eq(userProfile.userId, instructorUserId));
+  return profile?.name ?? "Unknown instructor";
+}
+
 async function toSummaryWithCount(row: typeof course.$inferSelect): Promise<CourseSummary> {
   return {
     id: row.id,
@@ -1385,7 +1405,7 @@ async function toSummaryWithCount(row: typeof course.$inferSelect): Promise<Cour
     category: row.category,
     level: row.level,
     status: row.status,
-    instructorName: row.instructorUserId, // Task 13+ resolves this to a real display name
+    instructorName: await resolveInstructorName(row.instructorUserId),
     lessonCount: await countLessons(row.id),
   };
 }
@@ -1432,15 +1452,16 @@ function toRef(lesson: Lesson): LessonRef {
 }
 ```
 
-`instructorName` temporarily holds the raw `instructor_user_id` instead of a display name — Task
-13 (course mutations + display) resolves it to `user_profile.name` via a join once that's needed
-for the admin table and course detail header. Flag this with a `// TODO(task-13)` comment inline
-so it isn't missed, not left silently wrong.
+`resolveInstructorName` falls back to `"Unknown instructor"` rather than throwing if a course's
+`instructor_user_id` has no matching `user_profile` row — this can legitimately happen for the
+migration's temporary state between Task 9 (courses inserted, assigned to whichever user happens
+to exist) and a real instructor being assigned later, and a course detail page or admin table
+should degrade gracefully rather than 500.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `pnpm vitest run src/lib/content/queries.test.ts`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
 - [ ] **Step 5: Typecheck, lint, build**
 
@@ -1454,8 +1475,8 @@ pnpm typecheck && pnpm lint && pnpm build
 git add src/lib/content/queries.ts src/lib/content/queries.test.ts
 git commit -m "feat: swap content query seam for real Drizzle reads
 
-instructorName temporarily holds the raw instructor_user_id; Task 13
-resolves it to a real display name via a user_profile join."
+instructorName resolves the real display name via a user_profile join,
+falling back to \"Unknown instructor\" if no profile matches yet."
 ```
 
 ---
@@ -1463,7 +1484,8 @@ resolves it to a real display name via a user_profile join."
 ### Task 9: Migration/seed script
 
 **Files:**
-- Create: `src/db/seed.ts`, `src/db/seed.test.ts`
+- Create: `src/db/seed.ts`, `src/db/seed.test.ts`, `src/db/seed-cli.ts`
+- Modify: `package.json` (adds the `db:seed` script and the `tsx` dev dependency)
 
 **Interfaces:**
 - Consumes: `db`, full schema (Tasks 1-2), `loadAllCourses` (still exists at this point — deleted
@@ -1697,9 +1719,9 @@ pnpm typecheck && pnpm lint && pnpm build
 git add src/db/seed.ts src/db/seed.test.ts src/db/seed-cli.ts package.json pnpm-lock.yaml
 git commit -m "feat: add content migration/seed script
 
-promoteAdmin and resolveInstructorUserId's real by-email lookups against
-the Neon Auth user table are not yet finished — see the inline note in
-seed.ts. Complete both before running this against production (Task 19)."
+promoteAdmin and resolveInstructorUserId resolve ADMIN_EMAIL's real
+Neon Auth user id by email — no single-user assumption. Task 17 runs
+this for real against the working database before deleting content/."
 ```
 
 ---
@@ -2653,28 +2675,52 @@ git commit -m "chore: drop generateStaticParams now that course/lesson content i
 - Modify: `src/components/layout/site-header.tsx`, `.env.local`, `.env.example`
 
 **Interfaces:**
-- Consumes: nothing — this task only removes code once Tasks 1-16 have made it unreachable
+- Consumes: `runSeed` (Task 9) — run for real, once, in this task's Step 1, not deferred
 - Produces: nothing new
 
-- [ ] **Step 1: Confirm nothing still imports the files being deleted**
+This plan uses a single Neon branch for both development and production (per the "stay on main,
+no branch-per-PR previews" decision) — `DATABASE_URL` in `.env.local` already points at the only
+database this app has. That means the real, non-test seed run this task needs doesn't wait for a
+separate deploy step; it happens right here, against the same database every earlier task has
+been developing against.
+
+- [ ] **Step 1: Run the real seed against the working database**
+
+Task 9's own test (`seed.test.ts`) exercises `runSeed()` but cleans up its inserted rows in
+`afterAll` — nothing from it persists. Before deleting `content/`, actually run the seed for real
+and leave its output in place:
+
+```bash
+pnpm db:seed
+```
+
+Expected output: `Seeded 5 courses, 20 lessons.` Confirm with a real query
+(`psql "$DATABASE_URL" -c "select slug, status from course;"` or the Neon console's SQL editor)
+that all 5 courses (4 published + `test-fixture-course` as a draft) are present and staying.
+
+If `pnpm db:seed` fails because `ADMIN_EMAIL` (`nearbyjustine@gmail.com`) hasn't signed up yet
+(Task 9's `resolveInstructorUserId` needs at least one `user_profile` row to exist), stop and sign
+up for real through `/sign-up` first — insert a real invite code directly if none exists yet
+(`INSERT INTO invite_code (code_hash) VALUES ('<sha256 hex of a code you choose>');`, same hashing
+`verifyInviteCode` in Task 4 uses) — then re-run `pnpm db:seed`.
+
+- [ ] **Step 2: Confirm nothing still imports the files being deleted**
 
 ```bash
 grep -rln "src/lib/content/loader\|src/lib/progress\|src/content/session\|role-switcher\|ROLE_COOKIE\|NEXT_PUBLIC_DEMO_MODE" src/ --include="*.ts" --include="*.tsx"
 ```
 
 The only expected hit left should be `src/db/seed.ts`'s `import { loadAllCourses } from
-"@/lib/content/loader"` — Task 9 used the loader one last time for the migration. Since the
-migration has now run in production (Task 19, which must happen before this task), that import is
-also safe to remove: replace `src/db/seed.ts`'s content-import logic with a note that the
-migration already ran and this function is now dead code, OR delete `runSeed`'s content-import
-half entirely and keep only `promoteAdmin` for any future admin-promotion needs. Prefer deleting
-the now-unneeded half — don't leave working code around whose only caller (`content/`) no longer
-exists.
+"@/lib/content/loader"` — Task 9 used the loader one last time for the migration, and Step 1 just
+ran it for real. That import is now safe to remove: delete `runSeed`'s content-import half
+entirely (the `for (const c of courses) { ... }` block and the `loadAllCourses` import), keeping
+only `promoteAdmin` for any future admin-promotion needs. Don't leave working code around whose
+only caller (`content/`) is about to stop existing.
 
 If `grep` turns up anything else, resolve it before deleting — it means an earlier task's rewiring
 was incomplete.
 
-- [ ] **Step 2: Delete the files**
+- [ ] **Step 3: Delete the files**
 
 ```bash
 git rm -r content/
@@ -2685,7 +2731,7 @@ git rm src/app/actions/set-role.ts
 git rm src/components/layout/role-switcher.tsx
 ```
 
-- [ ] **Step 3: Remove the role switcher from the header for real**
+- [ ] **Step 4: Remove the role switcher from the header for real**
 
 `src/components/layout/site-header.tsx` currently has a commented-out/stubbed `<RoleSwitcher />`
 from Task 6's temporary fix. Replace that stub with a real sign-out control — a small client
@@ -2716,7 +2762,7 @@ Verify `authClient.signOut()`'s exact call shape against whatever Task 5's clien
 Render `<SignOutButton />` in `site-header.tsx` next to the initials square, only when
 `session` is non-null.
 
-- [ ] **Step 4: Clean up env vars**
+- [ ] **Step 5: Clean up env vars**
 
 Remove `NEXT_PUBLIC_DEMO_MODE=true` from `.env.local` and `.env.example`. Confirm nothing else
 references it:
@@ -2727,7 +2773,7 @@ grep -rn "NEXT_PUBLIC_DEMO_MODE" src/ .env.example
 
 Expected: no hits.
 
-- [ ] **Step 5: Typecheck, lint, test, build**
+- [ ] **Step 6: Typecheck, lint, test, build**
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
@@ -2736,7 +2782,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 Expected: all green, with a smaller test suite than before (the deleted `loader.test.ts` and
 `progress.test.ts` are gone; everything else should still pass).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -2836,42 +2882,37 @@ Remove the now-unused `NEXT_PUBLIC_DEMO_MODE` production env var:
 vercel env rm NEXT_PUBLIC_DEMO_MODE production
 ```
 
-- [ ] **Step 2: Run the migration against production**
+- [ ] **Step 2: Verify the migration, invite code, and seed are already real — don't redo them**
 
-```bash
-DATABASE_URL="<production connection string>" pnpm exec drizzle-kit migrate
-```
+This plan uses a single Neon branch for both development and "production" (Prerequisites), so
+`DATABASE_URL` has pointed at the same database since Task 1. By this point:
+- The schema migration ran in Task 2.
+- Task 17 Step 1 ran `pnpm db:seed` for real (not just via its test) and confirmed
+  `Seeded 5 courses, 20 lessons.` — running it again here would be a no-op at best, since Task 17
+  Step 2 also deleted `runSeed`'s content-import half; re-running `pnpm db:seed` now only touches
+  `promoteAdmin`, not courses.
+- An invite code and a real `ADMIN_EMAIL` sign-up should already exist from Task 17 Step 1's
+  fallback path (or an earlier manual check in Tasks 5/7).
 
-- [ ] **Step 3: Insert the first real invite code**
-
-There's no admin UI for this yet (spec §13, deliberately deferred) — insert one directly:
+Confirm all three with a real query instead of redoing any of them:
 
 ```sql
--- via psql or the Neon console SQL editor, against the production database:
-INSERT INTO invite_code (code_hash) VALUES ('<sha256 hex of your chosen code>');
+select slug, status from course; -- expect 5 rows, test-fixture-course as draft
+select user_id, role from user_profile where role = 'admin'; -- expect ADMIN_EMAIL's row
+select count(*) from invite_code where revoked_at is null; -- expect at least 1
 ```
 
-(Same hashing as `verifyInviteCode` in Task 4 — `sha256(code.trim().toLowerCase())`.)
+If any of these come back empty, that's a real gap an earlier task's manual-check step should have
+caught — go back and complete it now (sign up as `ADMIN_EMAIL` with a real invite code, run
+`pnpm db:seed`) rather than treating it as this task's normal work.
 
-- [ ] **Step 4: Sign up as ADMIN_EMAIL, then seed**
-
-Complete the real `/sign-up` flow as `ADMIN_EMAIL` against production, using the invite code from
-Step 3. Confirm a `user_profile` row now exists. Then run the seed script against production:
-
-```bash
-DATABASE_URL="<production connection string>" pnpm db:seed
-```
-
-Confirm it reports `coursesImported: 5, lessonsImported: 20` and that `ADMIN_EMAIL`'s
-`user_profile.role` is now `admin`.
-
-- [ ] **Step 5: Deploy**
+- [ ] **Step 3: Deploy**
 
 ```bash
 vercel --prod
 ```
 
-- [ ] **Step 6: Walk the acceptance criteria**
+- [ ] **Step 4: Walk the acceptance criteria**
 
 Open spec §12 and check each box against the live production URL:
 
@@ -2887,7 +2928,7 @@ Open spec §12 and check each box against the live production URL:
   `NEXT_PUBLIC_DEMO_MODE` are all gone from the deployed build (check the Vercel build output/
   bundle, not just local `git status`)
 
-- [ ] **Step 7: Final commit**
+- [ ] **Step 5: Final commit**
 
 ```bash
 git add -A
@@ -2911,7 +2952,7 @@ git push
 - §10 testing → Tasks 8, 9, 18, plus the `generateStaticParams` open item resolved directly in
   Task 16
 - §11 deployment/env → Task 19
-- §12 acceptance criteria → Task 19 Step 6 walks every item
+- §12 acceptance criteria → Task 19 Step 4 walks every item
 
 **Placeholder scan:** No "TBD"/"add appropriate error handling"-style placeholders. Two spots
 intentionally flag unfinished-until-verified work rather than pretending certainty: Task 3's
