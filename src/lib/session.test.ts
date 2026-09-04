@@ -1,14 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const cookieStore = { value: undefined as string | undefined };
+/**
+ * `auth.getSession()` mock shape verified against the installed `@neondatabase/auth@0.5.0-beta`'s
+ * actual runtime (`dist/server-b0OzGjXl.mjs`'s `createAuthServer`), not the plan's guessed
+ * `auth.api.getSession({ headers })`:
+ *
+ * - The real method is `auth.getSession(...)` — no `api` namespace, no `headers` argument. The
+ *   Next.js server wrapper (`createNextRequestContext` in `dist/next/server/index.mjs`) reads
+ *   `cookies()`/`headers()` from `next/headers` itself, ambiently, so callers never pass them.
+ * - It returns `{ data, error }`, mirroring every other Neon Auth server method
+ *   (`fetchWithAuth`'s return shape). `data` is `{ session, user }` on success or
+ *   `{ session: null, user: null }` when there is no session (see `SessionData` in
+ *   `dist/types-CnMXQlnQ.d.mts`) — never `null` and never the bare session object.
+ */
+const mockGetSession = vi.fn();
+vi.mock("@/lib/auth/server", () => ({
+  auth: { getSession: mockGetSession },
+}));
 
-vi.mock("next/headers", () => ({
-  cookies: async () => ({
-    get: (name: string) =>
-      name === "sodales-demo-role" && cookieStore.value
-        ? { name, value: cookieStore.value }
-        : undefined,
-  }),
+const mockSelect = vi.fn();
+vi.mock("@/db", () => ({
+  db: { select: () => ({ from: () => ({ where: () => mockSelect() }) }) },
 }));
 
 const redirectMock = vi.fn(() => {
@@ -16,40 +28,73 @@ const redirectMock = vi.fn(() => {
 });
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 
-const { getSession, requireRole } = await import("./session");
+const { getSession, requireUser, requireRole } = await import("./session");
 
 beforeEach(() => {
-  cookieStore.value = undefined;
+  mockGetSession.mockReset();
+  mockSelect.mockReset();
   redirectMock.mockClear();
 });
 
 describe("getSession", () => {
-  it("defaults to the learner role when no cookie is set", async () => {
+  it("returns null when there is no auth session", async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null, user: null }, error: null });
+    expect(await getSession()).toBeNull();
+  });
+
+  it("joins the user_profile role onto the auth session", async () => {
+    mockGetSession.mockResolvedValue({
+      data: {
+        user: { id: "user-1", name: "Alex Rivera", email: "alex@sodales.app" },
+        session: { id: "session-1", userId: "user-1" },
+      },
+      error: null,
+    });
+    mockSelect.mockResolvedValue([{ role: "instructor" }]);
+
     const session = await getSession();
-    expect(session!.role).toBe("learner");
-    expect(session!.name).toBe("Alex Rivera");
+    expect(session).toEqual({
+      userId: "user-1",
+      name: "Alex Rivera",
+      email: "alex@sodales.app",
+      initials: "AR",
+      role: "instructor",
+    });
   });
 
-  it("reads the role from the cookie", async () => {
-    cookieStore.value = "admin";
-    expect((await getSession())!.role).toBe("admin");
-  });
+  it("defaults to learner when no user_profile row exists yet", async () => {
+    mockGetSession.mockResolvedValue({
+      data: {
+        user: { id: "user-2", name: "New Person", email: "new@sodales.app" },
+        session: { id: "session-2", userId: "user-2" },
+      },
+      error: null,
+    });
+    mockSelect.mockResolvedValue([]);
 
-  it("falls back to learner for an unrecognised cookie value", async () => {
-    cookieStore.value = "superuser";
     expect((await getSession())!.role).toBe("learner");
   });
 });
 
-describe("requireRole", () => {
-  it("returns the session when the role is sufficient", async () => {
-    cookieStore.value = "admin";
-    const session = await requireRole("instructor", "admin");
-    expect(session.role).toBe("admin");
+describe("requireUser", () => {
+  it("redirects to /login when there is no session", async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null, user: null }, error: null });
+    await expect(requireUser()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirectMock).toHaveBeenCalledWith("/login");
   });
+});
 
+describe("requireRole", () => {
   it("redirects when the role is insufficient", async () => {
-    cookieStore.value = "learner";
+    mockGetSession.mockResolvedValue({
+      data: {
+        user: { id: "user-1", name: "Alex", email: "alex@sodales.app" },
+        session: { id: "session-1", userId: "user-1" },
+      },
+      error: null,
+    });
+    mockSelect.mockResolvedValue([{ role: "learner" }]);
+
     await expect(requireRole("admin")).rejects.toThrow("NEXT_REDIRECT");
     expect(redirectMock).toHaveBeenCalledWith("/");
   });

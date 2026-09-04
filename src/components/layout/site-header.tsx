@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
-import { RoleSwitcher } from "@/components/layout/role-switcher";
 import { MainNav } from "@/components/layout/main-nav";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { getSession } from "@/lib/session";
@@ -19,17 +18,9 @@ export async function SiteHeader() {
         <MainNav showAdmin={showAdmin} />
 
         <div className="flex items-center gap-3">
-          {session ? (
-            <>
-              <RoleSwitcher current={session.role} />
-              <span
-                aria-hidden="true"
-                className="label-eyebrow flex size-8 items-center justify-center rounded-md border border-border text-graphite"
-              >
-                {session.initials}
-              </span>
-            </>
-          ) : null}
+          {/* TODO(Task 17): RoleSwitcher read the now-deleted ROLE_COOKIE and is disabled here
+              until it (and set-role.ts) are removed for good. */}
+          {session ? <span>{session.initials}</span> : null}
           <MobileNav showAdmin={showAdmin} />
         </div>
       </div>
