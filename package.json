@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:seed": "dotenv -e .env.local -- tsx --conditions=react-server src/db/seed-cli.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -41,11 +42,13 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.4.2",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.11"
