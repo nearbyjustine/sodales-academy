@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
-import { getTrackBySlug, getTracks, getTracksForAdmin } from "./queries";
+import { getTrackBySlug, getTracks, getTracksForAdmin, getTracksForCourse } from "./queries";
 import type { Session } from "@/lib/session";
 
 const P = "track-queries-test";
@@ -12,6 +12,7 @@ const WITH_DRAFT_COURSE = `${P}-with-draft-course`;
 const COURSE_A = `${P}-course-a`;
 const COURSE_B = `${P}-course-b`;
 const COURSE_DRAFT = `${P}-course-draft`;
+const ORPHAN_COURSE = `${P}-orphan`;
 const INSTRUCTOR = `${P}-instructor`;
 const LEARNER = `${P}-learner`;
 
@@ -84,6 +85,7 @@ afterAll(async () => {
   await db.delete(course).where(eq(course.slug, COURSE_A));
   await db.delete(course).where(eq(course.slug, COURSE_B));
   await db.delete(course).where(eq(course.slug, COURSE_DRAFT));
+  await db.delete(course).where(eq(course.slug, ORPHAN_COURSE));
   await db.delete(userProfile).where(eq(userProfile.userId, INSTRUCTOR));
 });
 
@@ -165,5 +167,41 @@ describe("getTracksForAdmin", () => {
   it("returns an empty array for a non-admin viewer", async () => {
     const tracks = await getTracksForAdmin(learnerSession);
     expect(tracks).toEqual([]);
+  });
+});
+
+describe("getTracksForCourse", () => {
+  it("returns the published tracks a course belongs to", async () => {
+    // COURSE_B (unlike COURSE_A) sits in exactly one track (PUBLISHED) per the
+    // beforeAll fixtures above — COURSE_A is also linked into
+    // WITH_DRAFT_COURSE, which would make this assertion about a *single*
+    // track membership fail for the wrong reason.
+    const [c] = await db.select().from(course).where(eq(course.slug, COURSE_B));
+    const tracks = await getTracksForCourse(c.id);
+    expect(tracks.map((t) => t.slug)).toEqual([PUBLISHED]);
+  });
+
+  it("returns an empty list for a course in no track", async () => {
+    const [orphan] = await db
+      .insert(course)
+      .values({
+        slug: ORPHAN_COURSE, title: "Orphan", description: "d", category: "Testing",
+        level: "beginner", status: "published", instructorUserId: INSTRUCTOR,
+      })
+      .returning();
+
+    expect(await getTracksForCourse(orphan.id)).toEqual([]);
+  });
+
+  it("omits a draft track a course belongs to", async () => {
+    // A course in a draft track must not advertise that track on its public
+    // page — that would leak an unreleased track's title and slug. Uses
+    // COURSE_B (see note above) so the only other membership is PUBLISHED.
+    const [c] = await db.select().from(course).where(eq(course.slug, COURSE_B));
+    const [draft] = await db.select().from(track).where(eq(track.slug, DRAFT));
+    await db.insert(trackCourse).values({ trackId: draft.id, courseId: c.id, position: 0 });
+
+    const tracks = await getTracksForCourse(c.id);
+    expect(tracks.map((t) => t.slug)).toEqual([PUBLISHED]);
   });
 });

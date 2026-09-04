@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { CourseOutline } from "@/components/course/course-outline";
 import { EnrollButton } from "@/components/course/enroll-button";
-import { getCompletedLessonIds, getCourseBySlug, isEnrolled } from "@/lib/content/queries";
+import { TrackBreadcrumb } from "@/components/track/track-breadcrumb";
+import { getCompletedLessonIds, getCourseBySlug, getTracksForCourse, isEnrolled } from "@/lib/content/queries";
 import { firstIncompleteLesson } from "@/lib/lesson-progress";
 import { getSession } from "@/lib/session";
 
@@ -26,6 +27,7 @@ export default async function CoursePage({ params }: PageProps) {
 
   const firstLesson = course.modules[0]?.lessons[0];
   const session = await getSession();
+  const tracks = await getTracksForCourse(course.id);
 
   let cta: ReactNode = null;
 
@@ -73,6 +75,10 @@ export default async function CoursePage({ params }: PageProps) {
           {course.level}
         </Badge>
         <span className="label-eyebrow text-graphite">{course.category}</span>
+      </div>
+
+      <div className="mt-6">
+        <TrackBreadcrumb tracks={tracks} />
       </div>
 
       <h1 className="mt-3 text-4xl font-bold tracking-tight">{course.title}</h1>

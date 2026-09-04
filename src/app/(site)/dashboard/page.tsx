@@ -3,7 +3,8 @@ import { BookOpenIcon } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DashboardStats } from "@/components/course/dashboard-stats";
 import { EnrolledCourseCard } from "@/components/course/enrolled-course-card";
-import { getCompletedLessonIds, getCourseBySlug } from "@/lib/content/queries";
+import { TrackProgressCard } from "@/components/track/track-progress-card";
+import { getCompletedLessonIds, getCourseBySlug, getTrackBySlug, getTracks } from "@/lib/content/queries";
 import { getEnrollments, requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Dashboard", robots: { index: false } };
@@ -14,6 +15,18 @@ export default async function DashboardPage() {
   const courses = (
     await Promise.all(enrollments.map((e) => getCourseBySlug(e.courseSlug)))
   ).filter((c) => c !== null);
+
+  // A track shows here only when the learner is enrolled in EVERY course in it —
+  // which is exactly what enrollInTrack produces. Someone who bought one course
+  // that happens to sit in a track has not bought the track, and the dashboard
+  // must not imply they have.
+  const enrolledSlugs = new Set(enrollments.map((e) => e.courseSlug));
+  const trackDetails = (
+    await Promise.all((await getTracks()).map((t) => getTrackBySlug(t.slug, session)))
+  ).filter((t) => t !== null);
+  const myTracks = trackDetails.filter(
+    (t) => t.courses.length > 0 && t.courses.every((c) => enrolledSlugs.has(c.slug)),
+  );
 
   const progressByCourse = await Promise.all(
     courses.map(async (c) => {
@@ -45,6 +58,14 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <>
+          {myTracks.length > 0 ? (
+            <div className="mt-10 grid gap-6 lg:grid-cols-2">
+              {myTracks.map((t) => (
+                <TrackProgressCard key={t.slug} track={t} />
+              ))}
+            </div>
+          ) : null}
+
           <div className="mt-10">
             <DashboardStats
               coursesEnrolled={courses.length}

@@ -382,3 +382,19 @@ export async function getTrackBySlug(
 
   return { ...summary, courseCount, lessonCount, courses };
 }
+
+/**
+ * The published tracks a course belongs to. A course may sit in several, so
+ * this returns a list — a single-value version would silently pick one and
+ * render a confidently wrong "you are here".
+ */
+export async function getTracksForCourse(
+  courseId: string,
+): Promise<Pick<TrackSummary, "slug" | "title">[]> {
+  return db
+    .select({ slug: track.slug, title: track.title })
+    .from(trackCourse)
+    .innerJoin(track, eq(track.id, trackCourse.trackId))
+    .where(and(eq(trackCourse.courseId, courseId), eq(track.status, "published")))
+    .orderBy(asc(track.position), asc(track.slug));
+}

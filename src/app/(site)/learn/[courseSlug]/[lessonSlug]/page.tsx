@@ -7,7 +7,8 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { LessonBody } from "@/components/lesson/lesson-body";
 import { LessonSidebar } from "@/components/lesson/lesson-sidebar";
 import { CompleteToggle } from "@/components/lesson/complete-toggle";
-import { getCompletedLessonIds, getLesson } from "@/lib/content/queries";
+import { TrackBreadcrumb } from "@/components/track/track-breadcrumb";
+import { getCompletedLessonIds, getLesson, getTracksForCourse } from "@/lib/content/queries";
 import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { robots: { index: false } };
@@ -24,6 +25,7 @@ export default async function LessonPage({ params }: PageProps) {
   const lessonIds = lesson.modules.flatMap((m) => m.lessons.map((l) => l.id));
   const completed = await getCompletedLessonIds(session.userId, lessonIds);
   const totalLessons = lessonIds.length;
+  const tracks = await getTracksForCourse(lesson.course.id);
 
   return (
     <div>
@@ -36,6 +38,9 @@ export default async function LessonPage({ params }: PageProps) {
             <ArrowLeftIcon aria-hidden="true" className="size-4" />
             {lesson.course.title}
           </Link>
+          <div className="hidden sm:flex">
+            <TrackBreadcrumb tracks={tracks} />
+          </div>
           <span className="label-eyebrow text-graphite">
             Lesson {lesson.position} of {totalLessons}
           </span>
