@@ -6,23 +6,12 @@ import { Button } from "@/components/ui/button";
 import { LessonBody } from "@/components/lesson/lesson-body";
 import { LessonSidebar } from "@/components/lesson/lesson-sidebar";
 import { CompleteToggle } from "@/components/lesson/complete-toggle";
-import { getCompletedLessonIds, getCourseBySlug, getCourses, getLesson } from "@/lib/content/queries";
+import { getCompletedLessonIds, getLesson } from "@/lib/content/queries";
 import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { robots: { index: false } };
 
 type PageProps = { params: Promise<{ courseSlug: string; lessonSlug: string }> };
-
-export async function generateStaticParams() {
-  const summaries = await getCourses();
-  const courses = await Promise.all(summaries.map((c) => getCourseBySlug(c.slug)));
-
-  return courses.filter((c) => c !== null).flatMap((course) =>
-    course.modules.flatMap((m) =>
-      m.lessons.map((lesson) => ({ courseSlug: course.slug, lessonSlug: lesson.slug })),
-    ),
-  );
-}
 
 export default async function LessonPage({ params }: PageProps) {
   const { courseSlug, lessonSlug } = await params;

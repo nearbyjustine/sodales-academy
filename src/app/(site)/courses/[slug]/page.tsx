@@ -6,16 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CourseOutline } from "@/components/course/course-outline";
 import { EnrollButton } from "@/components/course/enroll-button";
-import { getCompletedLessonIds, getCourseBySlug, getCourses, isEnrolled } from "@/lib/content/queries";
+import { getCompletedLessonIds, getCourseBySlug, isEnrolled } from "@/lib/content/queries";
 import { firstIncompleteLesson } from "@/lib/lesson-progress";
 import { getSession } from "@/lib/session";
 
 type PageProps = { params: Promise<{ slug: string }> };
-
-export async function generateStaticParams() {
-  const courses = await getCourses();
-  return courses.map((course) => ({ slug: course.slug }));
-}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
