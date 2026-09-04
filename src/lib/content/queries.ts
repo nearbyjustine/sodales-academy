@@ -43,6 +43,17 @@ export async function getCourseBySlug(slug: string): Promise<CourseDetail | null
   return toDetail(row);
 }
 
+/**
+ * Status-agnostic variant of `getCourseBySlug` for admin use (e.g. the course edit page), where a
+ * draft course must remain visible to whoever can manage it. `getCourseBySlug` itself stays
+ * published-only — the public catalog/lesson pages must never surface a draft.
+ */
+export async function getCourseBySlugForAdmin(slug: string): Promise<CourseDetail | null> {
+  const [row] = await db.select().from(course).where(eq(course.slug, slug));
+  if (!row) return null;
+  return toDetail(row);
+}
+
 export async function getAllCourses(): Promise<CourseSummary[]> {
   const rows = await db.select().from(course);
   return Promise.all(rows.map((r) => toSummaryWithCount(r)));
