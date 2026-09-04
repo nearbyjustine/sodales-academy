@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { GoogleButton } from "@/components/auth/google-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -15,24 +13,6 @@ export default function LoginPage() {
       </div>
 
       <GoogleButton />
-
-      <div className="flex items-center gap-3">
-        <span aria-hidden="true" className="h-px flex-1 bg-border" />
-        <span className="label-eyebrow text-graphite">or</span>
-        <span aria-hidden="true" className="h-px flex-1 bg-border" />
-      </div>
-
-      <fieldset disabled className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="login-email">Email</Label>
-          <Input id="login-email" type="email" placeholder="you@example.com" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="login-password">Password</Label>
-          <Input id="login-password" type="password" placeholder="••••••••" />
-        </div>
-        <p className="text-sm text-graphite">Email sign-in arrives with the next release.</p>
-      </fieldset>
 
       <p className="text-sm text-graphite">
         New to the Academy?{" "}

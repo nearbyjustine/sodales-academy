@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { Button } from "@/components/ui/button";
 import { MainNav } from "@/components/layout/main-nav";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { SignOutButton } from "@/components/layout/sign-out-button";
@@ -21,10 +22,19 @@ export async function SiteHeader() {
         <div className="flex items-center gap-3">
           {session ? (
             <>
-              <span>{session.initials}</span>
+              <span
+                aria-hidden="true"
+                className="label-eyebrow flex size-8 items-center justify-center rounded-md border border-border text-graphite"
+              >
+                {session.initials}
+              </span>
               <SignOutButton />
             </>
-          ) : null}
+          ) : (
+            <Button variant="outline" size="sm" render={<Link href="/login" />}>
+              Sign in
+            </Button>
+          )}
           <MobileNav showAdmin={showAdmin} />
         </div>
       </div>
