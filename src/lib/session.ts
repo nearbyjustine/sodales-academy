@@ -1,9 +1,11 @@
 import "server-only";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { userProfile, enrollment, course } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
+import { verifyInviteToken, INVITE_TOKEN_COOKIE } from "@/lib/auth/invite";
 
 export type Role = "learner" | "instructor" | "admin";
 
@@ -44,6 +46,16 @@ function initialsFor(name: string): string {
  * - It returns `{ data, error }`, matching every other Neon Auth server method's return shape
  *   (see `fetchWithAuth` in the same file). `data` is `SessionData` — `{ session, user }` on
  *   success, or `{ session: null, user: null }` when there's no session — never a bare `null`.
+ *
+ * **First-sign-in provisioning (Task 7):** `@neondatabase/auth` exposes no in-process
+ * user-creation hook — Neon Auth is a hosted proxy, so the Google OAuth exchange and user-record
+ * creation happen on Neon's own server, not ours. `getSession()` is the one place in our code
+ * that reliably runs after every sign-in regardless of which internal path Neon's hosted service
+ * redirects through, so it does the provisioning itself: when an authenticated Neon Auth user has
+ * no `user_profile` row yet, that's treated as "first sign-in" — a valid invite token cookie
+ * provisions the row (role `learner`) and returns the new session; a missing/invalid one returns
+ * `null`, exactly as if the user were never signed in. Neon Auth considering the user "signed in"
+ * is not the same as this app granting them access.
  */
 
 export async function getSession(): Promise<Session | null> {
@@ -56,12 +68,36 @@ export async function getSession(): Promise<Session | null> {
     .from(userProfile)
     .where(eq(userProfile.userId, user.id));
 
+  if (profile) {
+    return {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      initials: initialsFor(user.name),
+      role: profile.role,
+    };
+  }
+
+  // No user_profile row — this is a fresh Google sign-in. Only provision one if they arrived
+  // with a valid, unexpired invite token.
+  const store = await cookies();
+  const token = store.get(INVITE_TOKEN_COOKIE)?.value;
+  const verified = token ? verifyInviteToken(token) : null;
+  if (!verified) return null;
+
+  await db
+    .insert(userProfile)
+    .values({ userId: user.id, name: user.name, role: "learner" })
+    .onConflictDoNothing(); // idempotent — a retried request shouldn't insert twice
+
+  store.delete(INVITE_TOKEN_COOKIE);
+
   return {
     userId: user.id,
     name: user.name,
     email: user.email,
     initials: initialsFor(user.name),
-    role: profile?.role ?? "learner",
+    role: "learner",
   };
 }
 

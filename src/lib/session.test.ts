@@ -19,8 +19,12 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 
 const mockSelect = vi.fn();
+const mockInsert = vi.fn();
 vi.mock("@/db", () => ({
-  db: { select: () => ({ from: () => ({ where: () => mockSelect() }) }) },
+  db: {
+    select: () => ({ from: () => ({ where: () => mockSelect() }) }),
+    insert: () => ({ values: () => ({ onConflictDoNothing: mockInsert }) }),
+  },
 }));
 
 const redirectMock = vi.fn(() => {
@@ -28,12 +32,26 @@ const redirectMock = vi.fn(() => {
 });
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 
+const mockCookieGet = vi.fn();
+const mockCookieDelete = vi.fn();
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: mockCookieGet, delete: mockCookieDelete }),
+}));
+
+vi.mock("@/lib/auth/invite", () => ({
+  verifyInviteToken: vi.fn((token: string) => (token === "valid-token" ? { inviteCodeId: "c1" } : null)),
+  INVITE_TOKEN_COOKIE: "sodales-invite-token",
+}));
+
 const { getSession, requireUser, requireRole } = await import("./session");
 
 beforeEach(() => {
   mockGetSession.mockReset();
   mockSelect.mockReset();
+  mockInsert.mockReset();
   redirectMock.mockClear();
+  mockCookieGet.mockReset();
+  mockCookieDelete.mockReset();
 });
 
 describe("getSession", () => {
@@ -62,17 +80,38 @@ describe("getSession", () => {
     });
   });
 
-  it("defaults to learner when no user_profile row exists yet", async () => {
+});
+
+describe("getSession — first sign-in provisioning", () => {
+  it("provisions a learner profile when a valid invite token cookie is present", async () => {
     mockGetSession.mockResolvedValue({
-      data: {
-        user: { id: "user-2", name: "New Person", email: "new@sodales.app" },
-        session: { id: "session-2", userId: "user-2" },
-      },
-      error: null,
+      data: { user: { id: "user-2", name: "New Person", email: "new@sodales.app" } },
+    });
+    mockSelect.mockResolvedValue([]); // no existing profile
+    mockCookieGet.mockReturnValue({ value: "valid-token" });
+
+    const session = await getSession();
+
+    expect(session).toEqual({
+      userId: "user-2",
+      name: "New Person",
+      email: "new@sodales.app",
+      initials: "NP",
+      role: "learner",
+    });
+    expect(mockInsert).toHaveBeenCalled();
+    expect(mockCookieDelete).toHaveBeenCalledWith("sodales-invite-token");
+  });
+
+  it("returns null — no app access — when there's no valid invite token", async () => {
+    mockGetSession.mockResolvedValue({
+      data: { user: { id: "user-3", name: "Nobody", email: "nobody@sodales.app" } },
     });
     mockSelect.mockResolvedValue([]);
+    mockCookieGet.mockReturnValue(undefined); // no invite cookie at all
 
-    expect((await getSession())!.role).toBe("learner");
+    expect(await getSession()).toBeNull();
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 });
 
