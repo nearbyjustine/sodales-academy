@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:seed": "dotenv -e .env.local -- tsx --conditions=react-server src/db/seed-cli.ts"
+    "db:seed": "dotenv -e .env.local -- tsx --conditions=react-server src/db/seed-cli.ts",
+    "db:seed:tracks": "dotenv -e .env.local -- tsx --conditions=react-server src/db/seed-tracks-cli.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
