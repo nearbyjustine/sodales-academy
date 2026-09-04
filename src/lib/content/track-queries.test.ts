@@ -288,4 +288,51 @@ describe("getFullyEnrolledTrackSlugs", () => {
   it("returns an empty list for a user enrolled in nothing", async () => {
     expect(await getFullyEnrolledTrackSlugs(NO_ENROLLMENT_LEARNER)).toEqual([]);
   });
+
+  it("omits a track when a linked course is unpublished after only partial enrolment (Fix 4)", async () => {
+    // Reachable break this guards against: published track [X, Y], a learner
+    // enrolled in X only, then an admin unpublishes Y. A definition that
+    // re-derives membership from the STATUS-FILTERED course list (as the page
+    // used to, via `track.courses.every(...)`) would then see courses = [X],
+    // find `.every()` vacuously true, and wrongly render the enrolled map with
+    // a progress bar and Continue CTA for a track never fully bought. The SQL
+    // here counts every trackCourse link regardless of course status — it
+    // matches what enrollInTrack actually wrote — so courseCount stays 2 and
+    // this must never qualify no matter what happens to Y's status.
+    const UNPUB_TRACK = `${P}-unpublish-scenario`;
+    const COURSE_X = `${P}-unpub-x`;
+    const COURSE_Y = `${P}-unpub-y`;
+    const UNPUB_LEARNER = `${P}-unpub-learner`;
+
+    const [x] = await db.insert(course).values({
+      slug: COURSE_X, title: "X", description: "d", category: "Testing",
+      level: "beginner", status: "published", instructorUserId: INSTRUCTOR,
+    }).returning();
+    const [y] = await db.insert(course).values({
+      slug: COURSE_Y, title: "Y", description: "d", category: "Testing",
+      level: "beginner", status: "published", instructorUserId: INSTRUCTOR,
+    }).returning();
+    const [t] = await db.insert(track).values({
+      slug: UNPUB_TRACK, title: "Unpublish Scenario Track", promise: "p", outcome: "o",
+      status: "published", position: 4,
+    }).returning();
+    await db.insert(trackCourse).values([
+      { trackId: t.id, courseId: x.id, position: 0 },
+      { trackId: t.id, courseId: y.id, position: 1 },
+    ]);
+    await db.insert(enrollment).values({ courseId: x.id, userId: UNPUB_LEARNER });
+
+    try {
+      // The learner never touched Y, and now Y is unpublished too.
+      await db.update(course).set({ status: "draft" }).where(eq(course.id, y.id));
+
+      const slugs = await getFullyEnrolledTrackSlugs(UNPUB_LEARNER);
+      expect(slugs).not.toContain(UNPUB_TRACK);
+    } finally {
+      await db.delete(enrollment).where(eq(enrollment.userId, UNPUB_LEARNER));
+      await db.delete(track).where(eq(track.slug, UNPUB_TRACK));
+      await db.delete(course).where(eq(course.slug, COURSE_X));
+      await db.delete(course).where(eq(course.slug, COURSE_Y));
+    }
+  });
 });

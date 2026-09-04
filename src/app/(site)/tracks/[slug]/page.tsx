@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TrackMap } from "@/components/track/track-map";
-import { getTrackBySlug } from "@/lib/content/queries";
-import { getEnrollments, getSession } from "@/lib/session";
+import { getFullyEnrolledTrackSlugs, getTrackBySlug } from "@/lib/content/queries";
+import { getSession } from "@/lib/session";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -24,15 +24,17 @@ export default async function TrackPage({ params }: PageProps) {
   const track = await getTrackBySlug(slug, session);
   if (!track) notFound();
 
-  // "Enrolled in the track" means enrolled in every course it contains — which
-  // is exactly what enrollInTrack produces. A partial enrolment (someone who
-  // bought one course earlier) reads as not-enrolled and is offered the track,
-  // which is the honest answer: they do not have all of it.
-  const enrolledSlugs = new Set(
-    session ? (await getEnrollments()).map((e) => e.courseSlug) : [],
-  );
-  const enrolled =
-    track.courses.length > 0 && track.courses.every((c) => enrolledSlugs.has(c.slug));
+  // "Fully enrolled" is defined once, in getFullyEnrolledTrackSlugs — see its
+  // doc comment for why it counts every course the track links regardless of
+  // status, rather than only the (possibly narrower, post-unpublish) status-
+  // filtered list this page renders. Deriving "enrolled" from `track.courses`
+  // instead would drift from what enrollInTrack actually wrote: an admin
+  // unpublishing one course out of a two-course track a learner bought only
+  // half of would then make `track.courses` a single, fully-owned course, and
+  // this page would wrongly render the enrolled map/progress bar/Continue CTA.
+  const enrolled = session
+    ? (await getFullyEnrolledTrackSlugs(session.userId)).includes(track.slug)
+    : false;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
