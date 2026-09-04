@@ -259,8 +259,18 @@ function canSeeDraftTracks(viewer?: Session | null): boolean {
  * Two queries total regardless of how many tracks or courses exist: one for the
  * tracks, one grouped aggregate for their counts. Do not turn this into a
  * per-track lookup.
+ *
+ * `showDrafts` pushes the same published-only filter `getTrackBySlug` applies
+ * to its course list into this aggregate's SQL, so a draft course linked into
+ * an otherwise-published track never inflates the count a non-admin sees on
+ * `/tracks`/the home hero — the discrepancy between that count and what
+ * `getTrackBySlug` renders on click-through would itself leak the hidden
+ * course's existence to an anonymous visitor.
  */
-async function toTrackSummaries(rows: (typeof track.$inferSelect)[]): Promise<TrackSummary[]> {
+async function toTrackSummaries(
+  rows: (typeof track.$inferSelect)[],
+  showDrafts: boolean,
+): Promise<TrackSummary[]> {
   if (rows.length === 0) return [];
 
   const trackIds = rows.map((r) => r.id);
@@ -272,8 +282,13 @@ async function toTrackSummaries(rows: (typeof track.$inferSelect)[]): Promise<Tr
       lessonCount: sql<number>`count(${lesson.id})`.mapWith(Number),
     })
     .from(trackCourse)
+    .innerJoin(course, eq(course.id, trackCourse.courseId))
     .leftJoin(lesson, eq(lesson.courseId, trackCourse.courseId))
-    .where(inArray(trackCourse.trackId, trackIds))
+    .where(
+      showDrafts
+        ? inArray(trackCourse.trackId, trackIds)
+        : and(inArray(trackCourse.trackId, trackIds), eq(course.status, "published")),
+    )
     .groupBy(trackCourse.trackId);
 
   const byTrackId = new Map(counts.map((c) => [c.trackId, c]));
@@ -297,7 +312,7 @@ export async function getTracks(): Promise<TrackSummary[]> {
     .from(track)
     .where(eq(track.status, "published"))
     .orderBy(asc(track.position), asc(track.id));
-  return toTrackSummaries(rows);
+  return toTrackSummaries(rows, false);
 }
 
 /**
@@ -309,7 +324,7 @@ export async function getTracks(): Promise<TrackSummary[]> {
 export async function getTracksForAdmin(viewer: Session): Promise<TrackSummary[]> {
   if (viewer.role !== "admin") return [];
   const rows = await db.select().from(track).orderBy(asc(track.position), asc(track.id));
-  return toTrackSummaries(rows);
+  return toTrackSummaries(rows, true);
 }
 
 export async function getTrackBySlug(
@@ -326,11 +341,11 @@ export async function getTrackBySlug(
     .where(eq(trackCourse.trackId, row.id))
     .orderBy(asc(trackCourse.position), asc(trackCourse.courseId));
 
-  const [summary] = await toTrackSummaries([row]);
+  const showDrafts = canSeeDraftTracks(viewer);
+  const [summary] = await toTrackSummaries([row], showDrafts);
   if (links.length === 0) return { ...summary, courses: [] };
 
   const courseIds = links.map((l) => l.courseId);
-  const showDrafts = canSeeDraftTracks(viewer);
 
   // Same rule `getCourseBySlug`/`getCourses` apply to the public catalog: a
   // DRAFT course must never surface its title/description/category/lessonCount

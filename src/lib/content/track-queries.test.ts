@@ -103,6 +103,24 @@ describe("getTracks", () => {
     const tracks = await getTracks();
     expect(tracks.find((t) => t.slug === DRAFT)).toBeUndefined();
   });
+
+  it("does not inflate course/lesson counts with a draft course (Fix 1)", async () => {
+    // WITH_DRAFT_COURSE links a published course (COURSE_A, 2 lessons) and a
+    // draft course (COURSE_DRAFT). The raw aggregate over every link would
+    // report 2 courses; a signed-out visitor must see the same numbers here
+    // that getTrackBySlug shows them on click-through, or the mismatch itself
+    // leaks the existence of a hidden course. Revert the `showDrafts` filter
+    // in `toTrackSummaries`'s query to see this fail (2 courses / more lessons
+    // vs. the 1 course / 2 lessons `getTrackBySlug` reports).
+    const tracks = await getTracks();
+    const summary = tracks.find((t) => t.slug === WITH_DRAFT_COURSE);
+    const detail = await getTrackBySlug(WITH_DRAFT_COURSE, null);
+
+    expect(summary).toBeDefined();
+    expect(detail).not.toBeNull();
+    expect(summary!.courseCount).toBe(detail!.courseCount);
+    expect(summary!.lessonCount).toBe(detail!.lessonCount);
+  });
 });
 
 describe("getTrackBySlug", () => {
