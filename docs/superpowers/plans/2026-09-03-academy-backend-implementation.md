@@ -736,14 +736,16 @@ add it in this same step:
 ```ts
 "use client";
 
-import { createAuthClient } from "@neondatabase/auth/client";
+import { createAuthClient } from "@neondatabase/auth/next";
 
 export const authClient = createAuthClient();
 ```
 
-Verify `createAuthClient`'s exact import path against whatever `@neondatabase/auth` version Task
-3 installed — client-side entry points are commonly under a `/client` or `/react` subpath, and the
-exact name varies by version.
+**Verified real API (found by Task 5's implementer):** the client entry point is
+`@neondatabase/auth/next`, not `@neondatabase/auth/client` — `createAuthClient()` takes no
+arguments (same-origin better-auth React client) and `authClient.signIn.social({ provider,
+callbackURL })` matches the shape used elsewhere in this task. Task 17's `SignOutButton` imports
+from this same module — use `authClient.signOut()`.
 
 The `/login` page's Google button keeps its Phase 1 behavior for now — real sign-in for an
 *existing* user doesn't need the invite gate, only sign-*up* does. `callbackURL` defaults to
