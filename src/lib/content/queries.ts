@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { eq, and, or, ilike, asc, inArray, count, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
@@ -47,11 +48,18 @@ export async function getCourses(
   return toSummariesWithCounts(rows);
 }
 
-export async function getCourseBySlug(slug: string): Promise<CourseDetail | null> {
+/**
+ * React-cached (same pattern as `getSession` in `src/lib/session.ts`): `/courses/[slug]` calls this
+ * once in `generateMetadata` and once in the page body per request, and it isn't a mutation, so
+ * `cache()` collapses that into one round-trip of queries instead of two. Keys on `slug`.
+ */
+export const getCourseBySlug = cache(async function getCourseBySlug(
+  slug: string,
+): Promise<CourseDetail | null> {
   const [row] = await db.select().from(course).where(eq(course.slug, slug));
   if (!row || row.status !== "published") return null;
   return toDetail(row);
-}
+});
 
 /**
  * Status-agnostic variant of `getCourseBySlug` for admin use (e.g. the course edit page), where a
@@ -327,7 +335,14 @@ export async function getTracksForAdmin(viewer: Session): Promise<TrackSummary[]
   return toTrackSummaries(rows, true);
 }
 
-export async function getTrackBySlug(
+/**
+ * React-cached (same pattern as `getSession` in `src/lib/session.ts`): `/tracks/[slug]` calls this
+ * once in `generateMetadata` and once in the page body per request, each with the same `slug` and
+ * the same `viewer` object (itself the return value of the request-cached `getSession()`), so
+ * `cache()` collapses ~14 queries into ~7 per request instead of doubling them. Keys on both
+ * arguments, so a different slug or a different session object still misses as expected.
+ */
+export const getTrackBySlug = cache(async function getTrackBySlug(
   slug: string,
   viewer?: Session | null,
 ): Promise<TrackDetail | null> {
@@ -396,7 +411,7 @@ export async function getTrackBySlug(
   const lessonCount = courses.reduce((sum, c) => sum + c.lessonCount, 0);
 
   return { ...summary, courseCount, lessonCount, courses };
-}
+});
 
 /**
  * The published tracks a viewer is FULLY enrolled in — enrolled in every

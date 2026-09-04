@@ -17,8 +17,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function TrackPage({ params }: PageProps) {
   const { slug } = await params;
 
-  // getSession is React-cached, so calling it here and in generateMetadata is
-  // one round-trip per request, not two.
+  // Both getSession and getTrackBySlug are React-cached, so calling them here
+  // and again in generateMetadata is one round-trip's worth of queries per
+  // request, not two.
   const session = await getSession();
   const track = await getTrackBySlug(slug, session);
   if (!track) notFound();
