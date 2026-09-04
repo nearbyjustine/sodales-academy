@@ -145,11 +145,18 @@ reality, not an enforced boundary.
   acknowledging the (accepted, low-volume-admin-write-path) risk of a mid-write crash leaving a
   partial state — this is a real limitation, not something to silently "fix" by wrapping in a
   transaction that will throw at runtime.
-- **`src/proxy.ts` (Next 16's renamed `middleware.ts`) only runs on `/dashboard`, `/learn`, and
-  `/admin`.** It exists solely to exchange Neon Auth's post-OAuth-redirect query param for a real
-  session cookie before any Server Component reads `auth.getSession()` — it is NOT a second
-  authorization gate in front of public pages (the catalog/home stay world-readable) and isn't a
-  substitute for `requireUser`/`requireRole`, which every authenticated route still calls itself.
+- **`src/proxy.ts` (Next 16's renamed `middleware.ts`) runs on `/`, `/dashboard`, `/learn`, and
+  `/admin`.** On `/dashboard`, `/learn`, and `/admin` it exists solely to exchange Neon Auth's
+  post-OAuth-redirect query param for a real session cookie before any Server Component reads
+  `auth.getSession()` — it is NOT a second authorization gate in front of public pages (the
+  catalog/home stay world-readable) and isn't a substitute for `requireUser`/`requireRole`, which
+  every authenticated route still calls itself. `/` was added to the matcher for a different,
+  unrelated reason: Server Components can't read the request pathname, and `BrandIntroGate` needs
+  it to scope the brand intro splash to the home page only. `/` is branched to BEFORE
+  `auth.middleware()` is ever called — it only sets an `x-pathname` request header and returns,
+  deliberately never reaching `auth.middleware()`, because that helper redirects unauthenticated
+  visitors on matched paths to `loginUrl` and would otherwise put the entire public pitch page
+  behind a login wall.
 
 ## Commands
 
@@ -189,7 +196,7 @@ each one hits.
 | `src/lib/auth/invite.ts` | HMAC-signs/verifies the short-lived invite-code cookie token (`INVITE_TOKEN_COOKIE`) |
 | `src/lib/auth/client.ts` | Client-side Neon Auth hooks/helpers |
 | `src/app/api/auth/[...path]/route.ts` | Neon Auth's own route handler (`auth.handler()`) |
-| `src/proxy.ts` | Next 16 middleware — exchanges the post-OAuth redirect param for a session cookie on `/dashboard`, `/learn`, `/admin` only |
+| `src/proxy.ts` | Next 16 middleware — exchanges the post-OAuth redirect param for a session cookie on `/dashboard`, `/learn`, `/admin`; also sets `x-pathname` on `/` (before `auth.middleware()`) so `BrandIntroGate` can scope the intro to the home page |
 | `src/app/actions/verify-invite-code.ts` | Server Action: checks a submitted code against `invite_code`, signs the invite-token cookie on success |
 | `src/lib/content/types.ts` | Shared types mirroring the DB schema field-for-field |
 | `src/lib/content/queries.ts` | Reads — `getCourses`/`getCourseBySlug`/`getCourseBySlugForAdmin`/`getLesson`/`getCatalogStats`/`getAllCourses`/`isEnrolled`/`getCompletedLessonIds` |

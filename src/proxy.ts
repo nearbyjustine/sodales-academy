@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/server";
 
 /**
@@ -18,8 +20,27 @@ import { auth } from "@/lib/auth/server";
  * the route trees that are already authenticated-only, so the OAuth verifier exchange runs where
  * it's needed without adding a second, redundant gate in front of public pages.
  */
-export default auth.middleware({ loginUrl: "/login" });
+const authMiddleware = auth.middleware({ loginUrl: "/login" });
+
+/**
+ * `/` was added to the matcher for ONE reason: Server Components cannot read the
+ * request pathname, and `BrandIntroGate` needs it to scope the intro to the home
+ * page. It is handled separately and deliberately never reaches
+ * `auth.middleware` — that helper redirects unauthenticated visitors on matched
+ * paths to `loginUrl`, and the home page is world-readable. This is still not an
+ * authorization gate; every authenticated route re-derives its own session via
+ * `requireUser`/`requireRole`.
+ */
+export default function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/") {
+    const headers = new Headers(request.headers);
+    headers.set("x-pathname", "/");
+    return NextResponse.next({ request: { headers } });
+  }
+
+  return authMiddleware(request);
+}
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/learn/:path*", "/admin/:path*"],
+  matcher: ["/", "/dashboard/:path*", "/learn/:path*", "/admin/:path*"],
 };
