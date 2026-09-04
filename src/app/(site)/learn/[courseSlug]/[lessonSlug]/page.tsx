@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { LessonBody } from "@/components/lesson/lesson-body";
 import { LessonSidebar } from "@/components/lesson/lesson-sidebar";
 import { CompleteToggle } from "@/components/lesson/complete-toggle";
-import { getCourseBySlug, getCourses, getLesson } from "@/lib/content/queries";
+import { getCompletedLessonIds, getCourseBySlug, getCourses, getLesson } from "@/lib/content/queries";
 import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { robots: { index: false } };
@@ -26,12 +26,14 @@ export async function generateStaticParams() {
 
 export default async function LessonPage({ params }: PageProps) {
   const { courseSlug, lessonSlug } = await params;
-  await requireUser();
+  const session = await requireUser();
 
   const lesson = await getLesson(courseSlug, lessonSlug);
   if (!lesson) notFound();
 
-  const totalLessons = lesson.modules.flatMap((m) => m.lessons).length;
+  const lessonIds = lesson.modules.flatMap((m) => m.lessons.map((l) => l.id));
+  const completed = await getCompletedLessonIds(session.userId, lessonIds);
+  const totalLessons = lessonIds.length;
 
   return (
     <div>
@@ -55,6 +57,7 @@ export default async function LessonPage({ params }: PageProps) {
           modules={lesson.modules}
           courseSlug={courseSlug}
           currentLessonSlug={lessonSlug}
+          completedLessonIds={[...completed]}
         />
 
         <div className="max-w-3xl">
@@ -65,7 +68,7 @@ export default async function LessonPage({ params }: PageProps) {
           </div>
 
           <div className="mt-6">
-            <CompleteToggle lessonId={lesson.id} />
+            <CompleteToggle lessonId={lesson.id} initialComplete={completed.has(lesson.id)} />
           </div>
 
           <div className="mt-10 flex items-center justify-between gap-4 border-t border-border pt-6">

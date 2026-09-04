@@ -1,21 +1,24 @@
-"use client";
-
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
-import { useCompletedLessonIds } from "@/lib/progress";
+import { firstIncompleteLesson } from "@/lib/lesson-progress";
 import type { CourseDetail } from "@/lib/content/types";
 
-export function EnrolledCourseCard({ course }: { course: CourseDetail }) {
-  const completed = useCompletedLessonIds();
+export function EnrolledCourseCard({
+  course,
+  completedLessonIds,
+}: {
+  course: CourseDetail;
+  completedLessonIds: string[];
+}) {
+  const completed = new Set(completedLessonIds);
   const lessons = course.modules.flatMap((m) => m.lessons);
   const doneCount = lessons.filter((l) => completed.has(l.id)).length;
   const total = lessons.length;
   const percent = total === 0 ? 0 : Math.round((doneCount / total) * 100);
 
-  const firstIncomplete = lessons.find((l) => !completed.has(l.id));
   const isFinished = total > 0 && doneCount === total;
-  const targetLesson = isFinished ? lessons[0] : (firstIncomplete ?? lessons[0]);
+  const targetLesson = firstIncompleteLesson(course.modules, completed);
 
   return (
     <div className="flex flex-col gap-4 rounded-md border border-border p-6">

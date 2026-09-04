@@ -13,17 +13,23 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useCompletedLessonIds } from "@/lib/progress";
 import type { CourseModule } from "@/lib/content/types";
 
 type LessonSidebarProps = {
   modules: CourseModule[];
   courseSlug: string;
   currentLessonSlug: string;
+  completedLessonIds: string[];
 };
 
-export function LessonSidebar({ modules, courseSlug, currentLessonSlug }: LessonSidebarProps) {
-  const completed = useCompletedLessonIds();
+export function LessonSidebar({
+  modules,
+  courseSlug,
+  currentLessonSlug,
+  completedLessonIds,
+}: LessonSidebarProps) {
+  // completedLessonIds is now a prop, not a hook result
+  const completed = new Set(completedLessonIds);
   const lessonIds = modules.flatMap((m) => m.lessons.map((l) => l.id));
   const progress = summarizeProgress(completed, lessonIds);
 
@@ -80,7 +86,7 @@ function SidebarContent({
   completed,
   progress,
   closeOnNavigate,
-}: LessonSidebarProps & {
+}: Omit<LessonSidebarProps, "completedLessonIds"> & {
   completed: Set<string>;
   progress: { completed: number; total: number; percent: number };
   closeOnNavigate?: boolean;

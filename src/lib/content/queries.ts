@@ -1,7 +1,7 @@
 import "server-only";
-import { eq, and, or, ilike, asc } from "drizzle-orm";
+import { eq, and, or, ilike, asc, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, lesson, userProfile } from "@/db/schema";
+import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
 import type { CourseDetail, CourseModule, CourseSummary, Lesson, Level } from "./types";
 
 export type LessonRef = { courseSlug: string; slug: string; title: string };
@@ -94,6 +94,28 @@ export async function getCatalogStats(): Promise<{
     lessons: counts.reduce((sum, n) => sum + n, 0),
     categories: new Set(published.map((c) => c.category)).size,
   };
+}
+
+export async function isEnrolled(courseId: string, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: enrollment.id })
+    .from(enrollment)
+    .where(and(eq(enrollment.courseId, courseId), eq(enrollment.userId, userId)));
+  return Boolean(row);
+}
+
+export async function getCompletedLessonIds(
+  userId: string,
+  lessonIds: string[],
+): Promise<Set<string>> {
+  if (lessonIds.length === 0) return new Set();
+
+  const rows = await db
+    .select({ lessonId: lessonProgress.lessonId })
+    .from(lessonProgress)
+    .where(and(eq(lessonProgress.userId, userId), inArray(lessonProgress.lessonId, lessonIds)));
+
+  return new Set(rows.map((r) => r.lessonId));
 }
 
 async function countLessons(courseId: string): Promise<number> {

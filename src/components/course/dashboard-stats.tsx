@@ -1,23 +1,16 @@
-"use client";
+type DashboardStatsProps = {
+  coursesEnrolled: number;
+  lessonsCompleted: number;
+  coursesFinished: number;
+};
 
-import { useCompletedLessonIds } from "@/lib/progress";
-import type { CourseDetail } from "@/lib/content/types";
-
-export function DashboardStats({ courses }: { courses: CourseDetail[] }) {
-  const completed = useCompletedLessonIds();
-
-  let lessonsCompleted = 0;
-  let coursesFinished = 0;
-
-  for (const course of courses) {
-    const lessons = course.modules.flatMap((m) => m.lessons);
-    const doneCount = lessons.filter((l) => completed.has(l.id)).length;
-    lessonsCompleted += doneCount;
-    if (lessons.length > 0 && doneCount === lessons.length) coursesFinished += 1;
-  }
-
+export function DashboardStats({
+  coursesEnrolled,
+  lessonsCompleted,
+  coursesFinished,
+}: DashboardStatsProps) {
   const stats = [
-    { label: "Courses enrolled", value: courses.length },
+    { label: "Courses enrolled", value: coursesEnrolled },
     { label: "Lessons completed", value: lessonsCompleted },
     { label: "Courses finished", value: coursesFinished },
   ];
