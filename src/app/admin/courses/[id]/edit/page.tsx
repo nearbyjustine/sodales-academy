@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CourseForm } from "@/components/admin/course-form";
 import { getCourseBySlug } from "@/lib/content/queries";
+import { listInstructors } from "@/lib/content/mutations";
 import { requireRole } from "@/lib/session";
 import type { CourseInput } from "@/lib/validation";
 import type { CourseDetail } from "@/lib/content/types";
@@ -32,15 +33,29 @@ function toCourseInput(course: CourseDetail): CourseInput {
         content: lesson.content,
       })),
     })),
+    // `CourseDetail` doesn't carry the instructor's user id (only `instructorName`), and
+    // `updateCourse` never persists this field on edits anyway (Task 10) — so any syntactically
+    // valid UUID satisfies client-side validation without implying a real instructor was chosen.
+    instructorUserId: "00000000-0000-0000-0000-000000000000",
   };
 }
 
 export default async function EditCoursePage({ params }: PageProps) {
-  await requireRole("instructor", "admin");
+  const session = await requireRole("instructor", "admin");
   const { id } = await params;
 
   const course = await getCourseBySlug(id);
   if (!course) notFound();
 
-  return <CourseForm heading={`Edit ${course.title}`} initial={toCourseInput(course)} />;
+  const instructors = session.role === "admin" ? await listInstructors() : [];
+
+  return (
+    <CourseForm
+      heading={`Edit ${course.title}`}
+      initial={toCourseInput(course)}
+      courseId={course.id}
+      viewerRole={session.role}
+      instructors={instructors}
+    />
+  );
 }

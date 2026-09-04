@@ -1,9 +1,9 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { course, courseModule, lesson } from "@/db/schema";
+import { course, courseModule, lesson, userProfile } from "@/db/schema";
 import { requireRole, type Session } from "@/lib/session";
 import { courseInputSchema, type CourseInput } from "@/lib/validation";
 
@@ -164,4 +164,13 @@ export async function deleteCourse(courseId: string): Promise<MutationResult> {
   await db.delete(course).where(eq(course.id, courseId)); // CASCADE handles modules/lessons/enrollments/progress
   revalidatePath("/admin/courses");
   return { ok: true };
+}
+
+export async function listInstructors(): Promise<{ userId: string; name: string }[]> {
+  await requireRole("admin");
+  const rows = await db
+    .select({ userId: userProfile.userId, name: userProfile.name })
+    .from(userProfile)
+    .where(or(eq(userProfile.role, "instructor"), eq(userProfile.role, "admin")));
+  return rows;
 }

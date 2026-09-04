@@ -66,6 +66,7 @@ export default async function AdminCoursesPage() {
                   <TableCell>{course.lessonCount}</TableCell>
                   <TableCell>
                     <CourseRowActions
+                      id={course.id}
                       courseId={course.slug}
                       courseTitle={course.title}
                       status={course.status}
