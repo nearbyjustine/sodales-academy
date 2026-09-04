@@ -66,8 +66,7 @@ the live `neon neon-auth` CLI, kept here so Task 3 doesn't repeat the same wrong
 5. **Trusted domains registered**: `localhost` (via `neon neon-auth domain allow-localhost
    enable`) and `https://sodales.vercel.app` (via `neon neon-auth domain add`).
 6. **`INVITE_CODE_SECRET`** generated (`openssl rand -base64 32`) and in `.env.local`.
-7. **`ADMIN_EMAIL`** — still needs a human answer (which Google account becomes the first admin);
-   not yet in `.env.local`. Task 1 doesn't need it; Task 7/9 do.
+7. **`ADMIN_EMAIL`** = `nearbyjustine@gmail.com`, in `.env.local`. Task 1 doesn't need it; Task 7/9 do.
 
 **Still needed before Task 3, and only discoverable by installing the package:** the real
 `@neondatabase/auth` npm package (`0.5.0-beta` as of this writing, depends on `better-auth@1.6.23`
@@ -1060,110 +1059,222 @@ nothing else depends on it."
 
 ---
 
-### Task 7: OAuth callback completes sign-up
+### Task 7: Complete sign-up via lazy provisioning in `getSession()`
+
+**Architectural correction (found by this task's first attempt, BLOCKED and reported back
+correctly rather than guessing):** `@neondatabase/auth`'s `createNeonAuth` config is exhaustively
+`{ baseUrl, cookies, logger?, logLevel? }` — no `databaseHooks`, no lifecycle hook, no webhook
+mechanism exists anywhere in the package. Neon Auth is a **hosted proxy**: the Google OAuth
+exchange and user-record creation happen on Neon's own server, not in our process, so there is no
+in-process "after user created" moment to hook into at all. The `databaseHooks` string that does
+appear in the package's bundled types belongs to Better Auth's own internal plugin system running
+against its own hosted database — not a surface `createNeonAuth` exposes to callers.
+
+The controller's ruling: since there's no reliable hook, this task instead extends
+**`src/lib/session.ts`'s `getSession()` (Task 6)** — the one place in our own code that reliably
+runs after every Google sign-in, regardless of which internal path Neon's hosted service redirects
+through. When `getSession()` finds an authenticated Neon Auth user with no `user_profile` row yet,
+it treats that as "first sign-in": if a valid invite token cookie is present, it provisions the
+profile right there and returns the new session; if not, it returns `null` — the Google account
+authenticated with Neon, but has no app access, exactly as if it were never signed in as far as
+this app is concerned.
+
+This is a deliberate exception to the "one task, one file" pattern: reviewing this diff, expect it
+to touch `src/lib/session.ts` and `src/lib/session.test.ts` (Task 6's files), not a new
+`src/lib/auth/hooks.ts` — that file is not created by this task at all.
 
 **Files:**
-- Create: `src/lib/auth/hooks.ts`
+- Modify: `src/lib/session.ts`, `src/lib/session.test.ts`
 
 **Interfaces:**
-- Consumes: `verifyInviteToken`, `INVITE_TOKEN_COOKIE` (Task 4), `db`, `userProfile`, `inviteCode` (Tasks 1-2)
-- Produces: a Neon Auth lifecycle hook that creates the `user_profile` row on first sign-in,
-  after checking the invite token cookie
+- Consumes: `verifyInviteToken`, `INVITE_TOKEN_COOKIE` (Task 4), `db`, `userProfile` (Tasks 1-2)
+- Produces: `getSession()` keeps its exact signature (`Promise<Session | null>`), but now
+  provisions `user_profile` on a verified first sign-in instead of assuming `"learner"`
+  unconditionally when no profile exists
 
-- [ ] **Step 1: Verify the installed package's hook/callback mechanism**
+- [ ] **Step 1: Write the failing tests for the new provisioning behavior**
 
-Better-Auth-derived libraries commonly expose a `databaseHooks` or `hooks.after` option on
-`createNeonAuth`'s config for running code after a user is created. Check
-`node_modules/@neondatabase/auth`'s type definitions for the exact hook name and signature before
-writing this — the shape below is illustrative of the *behavior* needed, not a verified API call.
+Add to `src/lib/session.test.ts` (alongside Task 6's existing three `getSession` tests — the
+"defaults to learner when no user_profile row exists yet" test gets **replaced**, since that
+behavior is exactly what this task closes):
 
-- [ ] **Step 2: Implement the post-sign-up hook**
+```ts
+const mockCookieGet = vi.fn();
+const mockCookieDelete = vi.fn();
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: mockCookieGet, delete: mockCookieDelete }),
+}));
 
-Create `src/lib/auth/hooks.ts`:
+const mockInsert = vi.fn();
+vi.mock("@/db", () => ({
+  db: {
+    select: () => ({ from: () => ({ where: () => mockSelect() }) }),
+    insert: () => ({ values: () => ({ onConflictDoNothing: mockInsert }) }),
+  },
+}));
+
+vi.mock("@/lib/auth/invite", () => ({
+  verifyInviteToken: vi.fn((token: string) => (token === "valid-token" ? { inviteCodeId: "c1" } : null)),
+  INVITE_TOKEN_COOKIE: "sodales-invite-token",
+}));
+```
+
+Replace the old "defaults to learner when no user_profile row exists yet" test with:
+
+```ts
+describe("getSession — first sign-in provisioning", () => {
+  it("provisions a learner profile when a valid invite token cookie is present", async () => {
+    mockGetSession.mockResolvedValue({
+      data: { user: { id: "user-2", name: "New Person", email: "new@sodales.app" } },
+    });
+    mockSelect.mockResolvedValue([]); // no existing profile
+    mockCookieGet.mockReturnValue({ value: "valid-token" });
+
+    const session = await getSession();
+
+    expect(session).toEqual({
+      userId: "user-2",
+      name: "New Person",
+      email: "new@sodales.app",
+      initials: "NP",
+      role: "learner",
+    });
+    expect(mockInsert).toHaveBeenCalled();
+    expect(mockCookieDelete).toHaveBeenCalledWith("sodales-invite-token");
+  });
+
+  it("returns null — no app access — when there's no valid invite token", async () => {
+    mockGetSession.mockResolvedValue({
+      data: { user: { id: "user-3", name: "Nobody", email: "nobody@sodales.app" } },
+    });
+    mockSelect.mockResolvedValue([]);
+    mockCookieGet.mockReturnValue(undefined); // no invite cookie at all
+
+    expect(await getSession()).toBeNull();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+});
+```
+
+(`beforeEach` needs `mockCookieGet.mockReset(); mockCookieDelete.mockReset(); mockInsert.mockReset();`
+added alongside the existing resets.)
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `pnpm vitest run src/lib/session.test.ts`
+Expected: FAIL — `getSession()` still defaults unconditionally to `"learner"` with no invite check.
+
+- [ ] **Step 3: Implement lazy provisioning in `getSession()`**
+
+Replace `getSession()`'s body in `src/lib/session.ts`:
 
 ```ts
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { userProfile } from "@/db/schema";
+import { userProfile, enrollment, course } from "@/db/schema";
+import { auth } from "@/lib/auth/server";
 import { verifyInviteToken, INVITE_TOKEN_COOKIE } from "@/lib/auth/invite";
 
-export async function onUserCreated(user: { id: string; name: string }): Promise<void> {
-  const store = await cookies();
-  const token = store.get(INVITE_TOKEN_COOKIE)?.value;
-  const verified = token ? verifyInviteToken(token) : null;
+// ...Role, Session, Enrollment, initialsFor unchanged from Task 6...
 
-  if (!verified) {
-    throw new Error(
-      "No valid invite code found for this sign-up — the account was created but has no app access.",
-    );
-  }
+export async function getSession(): Promise<Session | null> {
+  const { data } = await auth.getSession();
+  const user = data?.user;
+  if (!user) return null;
 
-  const [existing] = await db
-    .select({ id: userProfile.id })
+  const [profile] = await db
+    .select({ role: userProfile.role })
     .from(userProfile)
     .where(eq(userProfile.userId, user.id));
 
-  if (existing) return; // idempotent — a retried callback shouldn't insert twice
+  if (profile) {
+    return {
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      initials: initialsFor(user.name),
+      role: profile.role,
+    };
+  }
 
-  await db.insert(userProfile).values({
-    userId: user.id,
-    name: user.name,
-    role: "learner",
-  });
+  // No user_profile row — this is a fresh Google sign-in. Only provision one if they
+  // arrived with a valid, unexpired invite token. Neon Auth considering this user
+  // "signed in" is not the same as this app granting them access.
+  const store = await cookies();
+  const token = store.get(INVITE_TOKEN_COOKIE)?.value;
+  const verified = token ? verifyInviteToken(token) : null;
+  if (!verified) return null;
+
+  await db
+    .insert(userProfile)
+    .values({ userId: user.id, name: user.name, role: "learner" })
+    .onConflictDoNothing(); // idempotent — a retried request shouldn't insert twice
 
   store.delete(INVITE_TOKEN_COOKIE);
+
+  return {
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    initials: initialsFor(user.name),
+    role: "learner",
+  };
 }
+
+// ...requireUser, requireRole, getEnrollments unchanged from Task 6...
 ```
 
-The thrown error on a missing/invalid invite token is intentional: per spec §6, a Google account
-that reaches the callback without a valid invite token must not silently get a `user_profile` row
-(and therefore no app access) — surfacing an explicit error is more honest than a silent partial
-account, matching the demo-honesty principle carried over from Phase 1.
+Returning `null` (not throwing) for the no-valid-token case is deliberate: `requireUser()` already
+redirects a `null` session to `/login`, so an unauthorized Google account gets the same "please
+sign in" experience as anyone else — no special error page, no stack trace, nothing that reveals
+whether their Google account is "known" to the app. It just isn't logged in, as far as this app is
+concerned.
 
-- [ ] **Step 3: Wire the hook into the auth instance**
+`getSession()` is called on every page load via `requireUser`/`requireRole` — the extra
+select-then-maybe-insert only runs on a user's very first request after signing up; every request
+after that hits the `if (profile)` branch and returns immediately.
 
-Update `src/lib/auth/server.ts` (from Task 3) to register this hook — the exact config key depends
-on Step 1's findings. Illustrative shape:
+- [ ] **Step 4: Run the test to verify it passes**
 
-```ts
-import { onUserCreated } from "@/lib/auth/hooks";
+Run: `pnpm vitest run src/lib/session.test.ts`
+Expected: PASS, 6 tests (Task 6's original `getSession`/`requireUser`/`requireRole` tests, minus
+the replaced one, plus these two new ones).
 
-export const auth = createNeonAuth({
-  // ...existing config from Task 3...
-  databaseHooks: {
-    user: {
-      create: {
-        after: onUserCreated,
-      },
-    },
-  },
-});
-```
-
-- [ ] **Step 4: Typecheck, lint, build**
+- [ ] **Step 5: Typecheck, lint, build**
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm build
 ```
 
-- [ ] **Step 5: Verify by hand**
+Expected: same pre-existing `ROLE_COOKIE` build failure as Task 6 left it (still deferred to Task
+17) — no new failures.
 
-With a real invite code inserted manually (same as Task 5's manual check) and Google OAuth
-credentials configured, run through `/sign-up` end-to-end: enter the code, click **Continue with
-Google**, complete the Google consent screen, land back on `/dashboard`. Confirm a row now exists
-in `user_profile` for that user with `role: "learner"`.
+- [ ] **Step 6: Verify by hand**
 
-If the Google Cloud consent screen isn't published yet (Prerequisites #4), this manual check is
-blocked — note that and move on; it isn't this task's fault and shouldn't block the rest of the
-plan.
+With a real invite code inserted manually (same as Task 5's manual check): run through `/sign-up`
+end-to-end — enter the code, click **Continue with Google**, complete the Google consent screen,
+land back on `/dashboard`. Confirm a row now exists in `user_profile` for that user with
+`role: "learner"`, and the invite-token cookie is gone afterward.
 
-- [ ] **Step 6: Commit**
+If the Google Cloud consent screen isn't published yet, or there's no browser available to
+complete an interactive OAuth flow, this manual check is blocked — note that and move on; it isn't
+this task's fault and shouldn't block the rest of the plan. The automated tests in Steps 1-4 cover
+the actual logic; this step is an extra real-world confidence check when the environment allows it.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/lib/auth/hooks.ts src/lib/auth/server.ts
-git commit -m "feat: create user_profile on sign-up, gated by a verified invite token"
+git add src/lib/session.ts src/lib/session.test.ts
+git commit -m "feat: provision user_profile on first sign-in via getSession, gated by invite token
+
+Neon Auth exposes no in-process user-creation hook — it's a hosted
+proxy, user records are created on Neon's server, not ours. getSession()
+is the one place in our code that reliably runs after every sign-in
+regardless of Neon's internal redirect routing, so it now provisions
+the user_profile row there instead."
 ```
 
 ---
@@ -1679,13 +1790,15 @@ async function resolveInstructorUserId(tx: typeof db): Promise<string> {
 async function promoteAdmin(): Promise<void> {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) throw new Error("ADMIN_EMAIL is not set.");
-  // Promotion needs to match on email, which lives on the Neon Auth user, not user_profile.
-  // Task 7's onUserCreated hook has access to the full user object at sign-up time; this
-  // function's real implementation depends on how @neondatabase/auth exposes querying its
-  // own user table from server code — verify against Task 3's docs-check before finishing
-  // this function. A placeholder that promotes the single existing user_profile row is NOT
-  // acceptable for the real implementation; it's only sketched above to keep resolveInstructorUserId
-  // working for the seed test's idempotency check until this function is completed for real.
+  // Promotion needs to match on email, which lives on the Neon Auth user, not user_profile
+  // (user_profile has no email column — see spec §5's data model). @neondatabase/auth exposes
+  // no in-process user-creation hook and no .api. namespace at all (Tasks 3/6/7 all found this
+  // the hard way) — check its real exports for a user-lookup-by-email method, or fall back to
+  // querying the neon_auth Postgres schema directly via Drizzle's raw SQL (it's a real schema
+  // in the same database, per spec §5). A placeholder that promotes the single existing
+  // user_profile row is NOT acceptable for the real implementation; it's only sketched above to
+  // keep resolveInstructorUserId working for the seed test's idempotency check until this
+  // function is completed for real.
 }
 ```
 
