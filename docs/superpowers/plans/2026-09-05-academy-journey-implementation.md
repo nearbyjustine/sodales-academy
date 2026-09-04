@@ -59,20 +59,25 @@ import { course, courseModule, lesson, enrollment, lessonProgress, track, trackC
  * track destroys no learner data.
  */
 const P = "track-schema-test";
-const TRACK_SLUG = `${P}-track`;
-const COURSE_SLUG = `${P}-course`;
 const USER = `${P}-user`;
 
+// Each test seeds its OWN rows. `track.slug` and `course.slug` are both UNIQUE,
+// so a single fixed-slug seed() called from two tests violates the constraint on
+// the second call and the failure looks like a schema bug rather than a test bug.
+const SUFFIXES = ["unique", "cascade"];
+
 afterAll(async () => {
-  await db.delete(track).where(eq(track.slug, TRACK_SLUG));
-  await db.delete(course).where(eq(course.slug, COURSE_SLUG));
+  for (const s of SUFFIXES) {
+    await db.delete(track).where(eq(track.slug, `${P}-track-${s}`));
+    await db.delete(course).where(eq(course.slug, `${P}-course-${s}`));
+  }
 });
 
-async function seed() {
+async function seed(suffix: string) {
   const [t] = await db
     .insert(track)
     .values({
-      slug: TRACK_SLUG,
+      slug: `${P}-track-${suffix}`,
       title: "Test Track",
       promise: "A promise.",
       outcome: "You finish able to test.",
@@ -84,7 +89,7 @@ async function seed() {
   const [c] = await db
     .insert(course)
     .values({
-      slug: COURSE_SLUG,
+      slug: `${P}-course-${suffix}`,
       title: "Test Course",
       description: "d",
       category: "Testing",
@@ -113,14 +118,14 @@ async function seed() {
 
 describe("track schema", () => {
   it("rejects the same course twice in one track", async () => {
-    const { t, c } = await seed();
+    const { t, c } = await seed("unique");
     await expect(
       db.insert(trackCourse).values({ trackId: t.id, courseId: c.id, position: 1 }),
     ).rejects.toThrow();
   });
 
   it("deleting a track destroys no enrolment or lesson progress", async () => {
-    const { t, c, l } = await seed();
+    const { t, c, l } = await seed("cascade");
 
     await db.delete(track).where(eq(track.id, t.id));
 
@@ -485,7 +490,9 @@ const learnerSession: Session = {
 };
 
 beforeAll(async () => {
-  await db.insert(userProfile).values({ userId: INSTRUCTOR, name: "Ins", email: "i@x.test", role: "instructor" }).onConflictDoNothing();
+  // `user_profile` has NO email column — userId, name, role only. Verified
+  // against src/db/schema/user.ts; do not add one here.
+  await db.insert(userProfile).values({ userId: INSTRUCTOR, name: "Ins", role: "instructor" }).onConflictDoNothing();
 
   const [ca] = await db.insert(course).values({
     slug: COURSE_A, title: "Course A", description: "d", category: "Testing",
@@ -2003,7 +2010,7 @@ export function TrackBreadcrumb({
 
   return (
     <p className="label-eyebrow flex flex-wrap items-center gap-2 text-graphite">
-      <span>{tracks.length === 1 ? "Part of" : "Part of"}</span>
+      <span>Part of</span>
       {tracks.map((t) => (
         <Link
           key={t.slug}
@@ -2513,7 +2520,6 @@ Create `src/app/admin/tracks/[id]/edit/page.tsx`:
 ```tsx
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
 import { TrackForm } from "@/components/admin/track-form";
 import { getAllCourses, getTrackBySlug, getTracksForAdmin } from "@/lib/content/queries";
 import { requireRole } from "@/lib/session";
@@ -2549,7 +2555,7 @@ export default async function EditTrackPage({ params }: PageProps) {
 }
 ```
 
-Remove the unused `eq` import if your editor does not — `pnpm lint` will flag it.
+Note there is no `drizzle-orm` or `@/db` import in either page. Pages resolve the track through the seam (`getTracksForAdmin` → `getTrackBySlug`); reaching for `@/db` here would break the one boundary every visibility and authorization rule in this app depends on.
 
 - [ ] **Step 6: Manual verification**
 
