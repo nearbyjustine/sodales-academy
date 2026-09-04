@@ -45,9 +45,15 @@ the live `neon neon-auth` CLI, kept here so Task 3 doesn't repeat the same wrong
    `aws-ap-southeast-1` (Singapore — matches Vercel `sin1` per `docs/00-platform.md` §9), Postgres
    18. Pooled connection string is in `.env.local` as `DATABASE_URL`.
 2. **Neon Auth enabled** on the `main` branch (`neon neon-auth enable`). Its `base_url` (in
-   `.env.local` as `NEON_AUTH_BASE_URL`) and `jwks_url` are the two endpoints the app needs —
-   there is **no separate cookie secret to generate**; Neon Auth manages its own session/signing
-   keys server-side. Drop `NEON_AUTH_COOKIE_SECRET` from Task 3's env checks entirely.
+   `.env.local` as `NEON_AUTH_BASE_URL`) and `jwks_url` are Neon's own hosted endpoints/signing
+   keys, and needed no secret to set up via the CLI. **Correction (found during Task 3):** this
+   does NOT mean the `@neondatabase/auth` npm SDK needs no secret of its own — `createNeonAuth`'s
+   real config (at `@neondatabase/auth/next/server`) takes a required, runtime-validated
+   `cookies: { secret }` (≥32 chars), a separate local secret from Neon's hosted keys. Generated
+   via `openssl rand -base64 32` and added to `.env.local` as `NEON_AUTH_COOKIE_SECRET` once Task
+   3 discovered this. The lesson: "the hosted service needs no secret" and "the SDK wrapping it
+   needs no secret" are different claims — verify each independently rather than assuming one
+   implies the other.
 3. **Google OAuth needs no Google Cloud project at all** — `neon neon-auth oauth-provider list`
    showed Google already configured as `{"id": "google", "type": "shared"}`: Neon's own shared
    OAuth app, enabled by default the moment Neon Auth turns on. This removes the multi-day consent-
@@ -335,50 +341,53 @@ git commit -m "feat: add Drizzle schema for courses, users, enrollment, and invi
 - Create: `src/lib/auth/server.ts`, `src/app/api/auth/[...path]/route.ts`
 
 **Interfaces:**
-- Consumes: `NEON_AUTH_BASE_URL` env var (Prerequisites — `NEON_AUTH_COOKIE_SECRET` and
-  `GOOGLE_CLIENT_ID`/`SECRET` are NOT needed; see the Prerequisites section's real findings)
+- Consumes: `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET` env vars (Prerequisites — the
+  cookie secret correction below)
 - Produces: `auth` — the Neon Auth instance, consumed by `src/lib/session.ts` (Task 6) and the
   invite-code gate (Task 4)
 
-- [ ] **Step 1: Install the real package and run its own codemod**
+**Verified real API (found by this task's implementer — supersedes the original speculative
+sketch):** `createNeonAuth` lives at `@neondatabase/auth/next/server`, not the package root. Its
+config is `{ baseUrl, cookies: { secret, ... } }` — note lowercase `baseUrl`, and `cookies.secret`
+(≥32 chars) is required and runtime-validated, contrary to the Prerequisites section's original
+(wrong) claim that no local SDK secret was needed. `auth.handler` is a **method**
+(`auth.handler()`), not a destructurable property. `neon-auth-codemod` only migrates legacy UI
+import paths — it does not scaffold `server.ts` or any config for you.
 
-The Prerequisites section already confirmed `@neondatabase/auth@0.5.0-beta` exists on npm, wraps
-`better-auth@1.6.23` directly, and ships a `neon-auth-codemod` CLI bin — that codemod is the
-authoritative source for how this version wants to be wired into a Next.js App Router project,
-not the snippet below (which is an unverified best-effort sketch based only on the CLI's
-`base_url`/`jwks_url` output).
+- [ ] **Step 1: Install the package**
 
 ```bash
 pnpm add @neondatabase/auth
-pnpm exec neon-auth-codemod
 ```
 
-Read what the codemod actually generates/modifies before proceeding — if it scaffolds
-`src/lib/auth/server.ts` (or an equivalent) itself, use its output directly in place of Step 2
-below rather than layering this plan's sketch on top of it. If no such codemod runs cleanly or it
-targets a different framework version, fall back to the package's README/`dist/index.d.ts` for the
-current `createNeonAuth` config shape.
+(Running `pnpm exec neon-auth-codemod` is optional and won't scaffold anything useful for a fresh
+integration — it only rewrites legacy `@neondatabase/auth-ui` import paths, which don't exist yet
+in this codebase.)
 
-- [ ] **Step 2: Configure the server instance (fallback, if the codemod didn't scaffold this)**
+- [ ] **Step 2: Configure the server instance**
 
 ```ts
 import "server-only";
-import { createNeonAuth } from "@neondatabase/auth";
+import { createNeonAuth } from "@neondatabase/auth/next/server";
 
 if (!process.env.NEON_AUTH_BASE_URL) {
   throw new Error("NEON_AUTH_BASE_URL is not set.");
 }
+if (!process.env.NEON_AUTH_COOKIE_SECRET) {
+  throw new Error("NEON_AUTH_COOKIE_SECRET is not set.");
+}
 
 export const auth = createNeonAuth({
-  baseURL: process.env.NEON_AUTH_BASE_URL,
+  baseUrl: process.env.NEON_AUTH_BASE_URL,
+  cookies: {
+    secret: process.env.NEON_AUTH_COOKIE_SECRET,
+  },
 });
 ```
 
-No `secret`/`socialProviders` config is expected here — Google is already configured as Neon's
-shared OAuth provider server-side (Prerequisites #3), and Neon Auth manages its own signing keys
-(Prerequisites #2). If the installed package's types disagree (require a `secret` or provider
-list anyway), that's a real signal the hosted config doesn't fully replace client-side setup —
-follow what the types actually require, don't force this shape to compile by inventing values.
+No `socialProviders` config is needed — Google is already configured as Neon's shared OAuth
+provider server-side (Prerequisites #3). If the installed package's types disagree, follow what
+the types actually require over this snippet.
 
 - [ ] **Step 3: Wire the handler route**
 
@@ -387,13 +396,16 @@ Create `src/app/api/auth/[...path]/route.ts`:
 ```ts
 import { auth } from "@/lib/auth/server";
 
-export const { GET, POST } = auth.handler;
+const handler = auth.handler();
+
+export const GET = handler;
+export const POST = handler;
 ```
 
-If the installed `@neondatabase/auth` version exports the handler differently (a single
-`toNextJsHandler(auth)` helper is common in Better-Auth-derived libraries), adjust to match —
-verify by checking the package's own Next.js integration example, or what the codemod generated in
-Step 1, rather than assuming this form.
+`auth.handler` is a method that returns the actual Next.js route handler, not a
+`{ GET, POST }` object itself — confirm this against the installed version's types if it doesn't
+match (`auth.handler()`'s return type should satisfy Next's route handler signature for both
+methods; if it returns something more specific per-verb, adjust accordingly).
 
 - [ ] **Step 4: Typecheck and build**
 
@@ -2876,14 +2888,16 @@ git commit -m "test: add end-to-end authorization and cascade-delete coverage"
 ```bash
 vercel env add DATABASE_URL production
 vercel env add NEON_AUTH_BASE_URL production
+vercel env add NEON_AUTH_COOKIE_SECRET production
 vercel env add ADMIN_EMAIL production
 vercel env add INVITE_CODE_SECRET production
 ```
 
-(No `NEON_AUTH_COOKIE_SECRET`/`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — see the Prerequisites
-section's real findings; Neon Auth manages its own signing keys and Google runs through Neon's
-shared OAuth app.) The production domain (`https://sodales.vercel.app`) is already registered as
-a trusted Neon Auth domain, so no domain-registration step is needed here.
+(No `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — Google runs through Neon's shared OAuth app, see
+the Prerequisites section. `NEON_AUTH_COOKIE_SECRET` IS needed — Task 3 found this is a separate,
+required local SDK secret, distinct from Neon's own hosted signing keys; see that task's
+"Verified real API" note.) The production domain (`https://sodales.vercel.app`) is already
+registered as a trusted Neon Auth domain, so no domain-registration step is needed here.
 
 Remove the now-unused `NEXT_PUBLIC_DEMO_MODE` production env var:
 
