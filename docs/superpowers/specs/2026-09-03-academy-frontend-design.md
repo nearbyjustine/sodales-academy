@@ -213,6 +213,7 @@ Recorded explicitly so the SDD can be reconciled later.
 | D-6 | Admin seeding by manual promotion after first Google sign-in, not `ADMIN_EMAIL` + password sign-up | Follows from D-2 |
 | D-7 | Docker deferred to Phase 2 | No second service to containerize in Phase 1 |
 | D-8 | **Next.js 16**, not 15 | 16.3.4 is current stable; greenfield project. See §4 |
+| D-9 | **Superseded.** The Academy was positioned as "for team members first" (D-2's "closed league membership" rationale; also stated this way in `CLAUDE.md`) | Superseded by `2026-09-05-academy-journey-design.md` §2 — the Academy now sells seats to customers, and an invite code is a receipt for a paid seat rather than proof of team membership. D-2's mechanism (Google OAuth + invite code) is unchanged; only the reason for gating access changed |
 
 ## 12. Repository conventions
 
