@@ -8,6 +8,13 @@
       "when": 1788484649229,
       "tag": "0000_fixed_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788538297689,
+      "tag": "0001_new_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

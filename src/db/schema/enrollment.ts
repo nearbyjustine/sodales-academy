@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, unique, index } from "drizzle-orm/pg-core";
 import { course, lesson } from "./course";
 
 export const enrollment = pgTable(
@@ -11,7 +11,9 @@ export const enrollment = pgTable(
     userId: text("user_id").notNull(),
     enrolledAt: timestamp("enrolled_at").notNull().defaultNow(),
   },
-  (table) => [unique().on(table.courseId, table.userId)],
+  // `unique(course_id, user_id)` doesn't serve user_id-alone lookups (getEnrollments) since
+  // user_id isn't its leading column — needs its own index.
+  (table) => [unique().on(table.courseId, table.userId), index().on(table.userId)],
 );
 
 export const lessonProgress = pgTable(
@@ -24,5 +26,6 @@ export const lessonProgress = pgTable(
     userId: text("user_id").notNull(),
     completedAt: timestamp("completed_at").notNull().defaultNow(),
   },
-  (table) => [unique().on(table.lessonId, table.userId)],
+  // Same reasoning as enrollment above — getCompletedLessonIds filters by user_id.
+  (table) => [unique().on(table.lessonId, table.userId), index().on(table.userId)],
 );

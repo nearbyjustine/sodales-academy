@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, integer, boolean, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, integer, boolean, timestamp, unique, index } from "drizzle-orm/pg-core";
 
 export const courseLevel = pgEnum("course_level", ["beginner", "intermediate", "advanced"]);
 export const courseStatus = pgEnum("course_status", ["draft", "published"]);
@@ -16,16 +16,20 @@ export const course = pgTable("course", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const courseModule = pgTable("course_module", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  courseId: uuid("course_id")
-    .notNull()
-    .references(() => course.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  position: integer("position").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+export const courseModule = pgTable(
+  "course_module",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => course.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [index().on(table.courseId)],
+);
 
 export const lesson = pgTable(
   "lesson",
@@ -45,5 +49,7 @@ export const lesson = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (table) => [unique().on(table.courseId, table.slug)],
+  // `unique(course_id, slug)` below also serves as an index for course_id-alone lookups
+  // (course_id is its leading column) — only module_id needs its own index here.
+  (table) => [unique().on(table.courseId, table.slug), index().on(table.moduleId)],
 );
