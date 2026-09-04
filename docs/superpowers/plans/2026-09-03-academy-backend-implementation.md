@@ -2004,39 +2004,44 @@ export async function createCourse(input: CourseInput): Promise<MutationResult> 
     return { ok: false, message: "That slug is already in use." };
   }
 
-  await db.transaction(async (tx) => {
-    const [insertedCourse] = await tx
-      .insert(course)
-      .values({
-        slug: parsed.data.slug,
-        title: parsed.data.title,
-        description: parsed.data.description,
-        category: parsed.data.category,
-        level: parsed.data.level,
-        status: "draft",
-        instructorUserId,
-      })
+  // NOT wrapped in `db.transaction(...)` — `src/db/index.ts` connects via `drizzle-orm/neon-http`,
+  // and that driver's `NeonHttpSession` throws `"No transactions support in neon-http driver"`
+  // synchronously the moment `.transaction()` is called (confirmed against the compiled driver
+  // during Task 9, `node_modules/drizzle-orm/neon-http/session.cjs`, not just its `.d.ts`). Every
+  // insert below runs directly against `db`, sequentially; a crash mid-createCourse can leave an
+  // orphaned course/module row, which is an accepted limitation of this driver for a low-volume
+  // admin-authored write path, not something this task papers over.
+  const [insertedCourse] = await db
+    .insert(course)
+    .values({
+      slug: parsed.data.slug,
+      title: parsed.data.title,
+      description: parsed.data.description,
+      category: parsed.data.category,
+      level: parsed.data.level,
+      status: "draft",
+      instructorUserId,
+    })
+    .returning();
+
+  for (const m of parsed.data.modules) {
+    const [insertedModule] = await db
+      .insert(courseModule)
+      .values({ courseId: insertedCourse.id, title: m.title, position: m.position })
       .returning();
 
-    for (const m of parsed.data.modules) {
-      const [insertedModule] = await tx
-        .insert(courseModule)
-        .values({ courseId: insertedCourse.id, title: m.title, position: m.position })
-        .returning();
-
-      for (const l of m.lessons) {
-        await tx.insert(lesson).values({
-          moduleId: insertedModule.id,
-          courseId: insertedCourse.id,
-          slug: l.slug,
-          title: l.title,
-          content: l.content,
-          position: l.position,
-          isPreview: l.isPreview,
-        });
-      }
+    for (const l of m.lessons) {
+      await db.insert(lesson).values({
+        moduleId: insertedModule.id,
+        courseId: insertedCourse.id,
+        slug: l.slug,
+        title: l.title,
+        content: l.content,
+        position: l.position,
+        isPreview: l.isPreview,
+      });
     }
-  });
+  }
 
   revalidatePath("/admin/courses");
   return { ok: true };
@@ -2059,42 +2064,42 @@ export async function updateCourse(courseId: string, input: CourseInput): Promis
     return { ok: false, message: "That slug is already in use." };
   }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(course)
-      .set({
-        title: parsed.data.title,
-        slug: parsed.data.slug,
-        description: parsed.data.description,
-        category: parsed.data.category,
-        level: parsed.data.level,
-        updatedAt: new Date(),
-      })
-      .where(eq(course.id, courseId));
+  // Not wrapped in `db.transaction(...)` — same `neon-http` driver limitation as `createCourse`
+  // above.
+  await db
+    .update(course)
+    .set({
+      title: parsed.data.title,
+      slug: parsed.data.slug,
+      description: parsed.data.description,
+      category: parsed.data.category,
+      level: parsed.data.level,
+      updatedAt: new Date(),
+    })
+    .where(eq(course.id, courseId));
 
-    // Replace modules/lessons wholesale — simpler and correct for admin-form-sized courses,
-    // where reconciling a diff against reordered/renamed rows isn't worth the complexity.
-    await tx.delete(courseModule).where(eq(courseModule.courseId, courseId));
+  // Replace modules/lessons wholesale — simpler and correct for admin-form-sized courses,
+  // where reconciling a diff against reordered/renamed rows isn't worth the complexity.
+  await db.delete(courseModule).where(eq(courseModule.courseId, courseId));
 
-    for (const m of parsed.data.modules) {
-      const [insertedModule] = await tx
-        .insert(courseModule)
-        .values({ courseId, title: m.title, position: m.position })
-        .returning();
+  for (const m of parsed.data.modules) {
+    const [insertedModule] = await db
+      .insert(courseModule)
+      .values({ courseId, title: m.title, position: m.position })
+      .returning();
 
-      for (const l of m.lessons) {
-        await tx.insert(lesson).values({
-          moduleId: insertedModule.id,
-          courseId,
-          slug: l.slug,
-          title: l.title,
-          content: l.content,
-          position: l.position,
-          isPreview: l.isPreview,
-        });
-      }
+    for (const l of m.lessons) {
+      await db.insert(lesson).values({
+        moduleId: insertedModule.id,
+        courseId,
+        slug: l.slug,
+        title: l.title,
+        content: l.content,
+        position: l.position,
+        isPreview: l.isPreview,
+      });
     }
-  });
+  }
 
   revalidatePath("/admin/courses");
   revalidatePath(`/courses/${parsed.data.slug}`);
