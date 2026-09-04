@@ -21,6 +21,7 @@ export function MobileNav({ showAdmin }: { showAdmin: boolean }) {
   const [open, setOpen] = useState(false);
 
   const links = [
+    { href: "/tracks", label: "Tracks" },
     { href: "/courses", label: "Courses" },
     { href: "/dashboard", label: "Dashboard" },
     ...(showAdmin ? [{ href: "/admin", label: "Admin" }] : []),

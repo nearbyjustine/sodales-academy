@@ -8,6 +8,7 @@ export function MainNav({ showAdmin }: { showAdmin: boolean }) {
   const pathname = usePathname();
 
   const links = [
+    { href: "/tracks", label: "Tracks" },
     { href: "/courses", label: "Courses" },
     { href: "/dashboard", label: "Dashboard" },
     ...(showAdmin ? [{ href: "/admin", label: "Admin" }] : []),
