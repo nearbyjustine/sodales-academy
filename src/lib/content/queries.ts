@@ -384,6 +384,42 @@ export async function getTrackBySlug(
 }
 
 /**
+ * The published tracks a viewer is FULLY enrolled in — enrolled in every
+ * course the track links, which is exactly what `enrollInTrack` produces.
+ * Someone who bought one course that happens to sit in a track has not
+ * bought the track, and the dashboard must not imply they have.
+ *
+ * A single grouped query (fixed cost regardless of catalog size — see the
+ * N+1 fix this replaced in the dashboard, same class of problem `0d1de0d`
+ * removed from `getCourses`/`getCatalogStats`): start from every published
+ * track, LEFT JOIN its course links, LEFT JOIN this user's enrollments
+ * against those links, then compare the two counts per track. A track with
+ * zero linked courses has `courseCount === 0 === enrolledCount` — trivially
+ * "equal" — so the `courseCount > 0` guard is load-bearing, not decorative:
+ * drop it and an empty track would count as "fully enrolled".
+ */
+export async function getFullyEnrolledTrackSlugs(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({
+      slug: track.slug,
+      courseCount: sql<number>`count(distinct ${trackCourse.courseId})`.mapWith(Number),
+      enrolledCount: sql<number>`count(distinct ${enrollment.courseId})`.mapWith(Number),
+    })
+    .from(track)
+    .leftJoin(trackCourse, eq(trackCourse.trackId, track.id))
+    .leftJoin(
+      enrollment,
+      and(eq(enrollment.courseId, trackCourse.courseId), eq(enrollment.userId, userId)),
+    )
+    .where(eq(track.status, "published"))
+    .groupBy(track.id, track.slug);
+
+  return rows
+    .filter((r) => r.courseCount > 0 && r.courseCount === r.enrolledCount)
+    .map((r) => r.slug);
+}
+
+/**
  * The published tracks a course belongs to. A course may sit in several, so
  * this returns a list — a single-value version would silently pick one and
  * render a confidently wrong "you are here".

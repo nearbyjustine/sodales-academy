@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
-import { getTrackBySlug, getTracks, getTracksForAdmin, getTracksForCourse } from "./queries";
+import { course, courseModule, enrollment, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
+import { getFullyEnrolledTrackSlugs, getTrackBySlug, getTracks, getTracksForAdmin, getTracksForCourse } from "./queries";
 import type { Session } from "@/lib/session";
 
 const P = "track-queries-test";
@@ -203,5 +203,71 @@ describe("getTracksForCourse", () => {
 
     const tracks = await getTracksForCourse(c.id);
     expect(tracks.map((t) => t.slug)).toEqual([PUBLISHED]);
+  });
+});
+
+describe("getFullyEnrolledTrackSlugs", () => {
+  const FULL_LEARNER = `${P}-full-learner`;
+  const PARTIAL_LEARNER = `${P}-partial-learner`;
+  const NO_ENROLLMENT_LEARNER = `${P}-no-enrollment-learner`;
+  const ZERO_COURSE_TRACK = `${P}-zero-course-track`;
+
+  beforeAll(async () => {
+    const [ca] = await db.select().from(course).where(eq(course.slug, COURSE_A));
+    const [cb] = await db.select().from(course).where(eq(course.slug, COURSE_B));
+    const [draft] = await db.select().from(track).where(eq(track.slug, DRAFT));
+
+    // FULL_LEARNER is enrolled in every course PUBLISHED links (Course A + B).
+    await db.insert(enrollment).values([
+      { courseId: ca.id, userId: FULL_LEARNER },
+      { courseId: cb.id, userId: FULL_LEARNER },
+    ]);
+
+    // PARTIAL_LEARNER is enrolled in only one of PUBLISHED's two courses.
+    await db.insert(enrollment).values({ courseId: ca.id, userId: PARTIAL_LEARNER });
+
+    // Link DRAFT to Course A too (in addition to whatever `getTracksForCourse`'s
+    // "omits a draft track" test above already linked) so FULL_LEARNER is
+    // enrolled in every course DRAFT links, regardless of file execution order —
+    // the test below must fail because of the status filter, not because DRAFT
+    // happens to have an unenrolled course.
+    await db.insert(trackCourse).values({ trackId: draft.id, courseId: ca.id, position: 1 });
+
+    // A published track with zero linked courses — nothing to be "fully
+    // enrolled" in, so it must never qualify no matter who asks.
+    await db.insert(track).values({
+      slug: ZERO_COURSE_TRACK, title: "Zero Course Track", promise: "p", outcome: "o",
+      status: "published", position: 3,
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(enrollment).where(eq(enrollment.userId, FULL_LEARNER));
+    await db.delete(enrollment).where(eq(enrollment.userId, PARTIAL_LEARNER));
+    await db.delete(track).where(eq(track.slug, ZERO_COURSE_TRACK));
+  });
+
+  it("returns a track the user is fully enrolled in", async () => {
+    const slugs = await getFullyEnrolledTrackSlugs(FULL_LEARNER);
+    expect(slugs).toContain(PUBLISHED);
+  });
+
+  it("omits a track the user is only partially enrolled in", async () => {
+    const slugs = await getFullyEnrolledTrackSlugs(PARTIAL_LEARNER);
+    expect(slugs).not.toContain(PUBLISHED);
+  });
+
+  it("omits a published track with zero linked courses, even for a user enrolled in everything else", async () => {
+    const slugs = await getFullyEnrolledTrackSlugs(FULL_LEARNER);
+    expect(slugs).not.toContain(ZERO_COURSE_TRACK);
+  });
+
+  it("omits a draft track even when the user is enrolled in every course it links", async () => {
+    const slugs = await getFullyEnrolledTrackSlugs(FULL_LEARNER);
+    expect(slugs).not.toContain(DRAFT);
+  });
+
+  it("returns an empty list for a user enrolled in nothing", async () => {
+    expect(await getFullyEnrolledTrackSlugs(NO_ENROLLMENT_LEARNER)).toEqual([]);
   });
 });

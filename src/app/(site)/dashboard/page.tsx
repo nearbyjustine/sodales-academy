@@ -4,7 +4,12 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { DashboardStats } from "@/components/course/dashboard-stats";
 import { EnrolledCourseCard } from "@/components/course/enrolled-course-card";
 import { TrackProgressCard } from "@/components/track/track-progress-card";
-import { getCompletedLessonIds, getCourseBySlug, getTrackBySlug, getTracks } from "@/lib/content/queries";
+import {
+  getCompletedLessonIds,
+  getCourseBySlug,
+  getFullyEnrolledTrackSlugs,
+  getTrackBySlug,
+} from "@/lib/content/queries";
 import { getEnrollments, requireUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Dashboard", robots: { index: false } };
@@ -16,17 +21,13 @@ export default async function DashboardPage() {
     await Promise.all(enrollments.map((e) => getCourseBySlug(e.courseSlug)))
   ).filter((c) => c !== null);
 
-  // A track shows here only when the learner is enrolled in EVERY course in it —
-  // which is exactly what enrollInTrack produces. Someone who bought one course
-  // that happens to sit in a track has not bought the track, and the dashboard
-  // must not imply they have.
-  const enrolledSlugs = new Set(enrollments.map((e) => e.courseSlug));
-  const trackDetails = (
-    await Promise.all((await getTracks()).map((t) => getTrackBySlug(t.slug, session)))
+  // getFullyEnrolledTrackSlugs already owns the "enrolled in EVERY course, and
+  // the track has at least one" rule in a single bounded query — no per-track
+  // fan-out here, and no re-derivation of that rule on the page.
+  const trackSlugs = await getFullyEnrolledTrackSlugs(session.userId);
+  const myTracks = (
+    await Promise.all(trackSlugs.map((slug) => getTrackBySlug(slug, session)))
   ).filter((t) => t !== null);
-  const myTracks = trackDetails.filter(
-    (t) => t.courses.length > 0 && t.courses.every((c) => enrolledSlugs.has(c.slug)),
-  );
 
   const progressByCourse = await Promise.all(
     courses.map(async (c) => {
