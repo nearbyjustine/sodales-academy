@@ -62,6 +62,7 @@ export async function getAllCourses(): Promise<CourseSummary[]> {
 export async function getLesson(
   courseSlug: string,
   lessonSlug: string,
+  viewer: { userId: string } | null,
 ): Promise<LessonWithNav | null> {
   const detail = await getCourseBySlug(courseSlug);
   if (!detail) return null;
@@ -70,12 +71,18 @@ export async function getLesson(
   const index = flat.findIndex((l) => l.slug === lessonSlug);
   if (index === -1) return null;
 
-  const { modules, ...summary } = detail;
+  const target = flat[index];
+  const canAccess =
+    target.isPreview || (viewer !== null && (await isEnrolled(detail.id, viewer.userId)));
+
+  if (!canAccess) return null;
+
+  const { modules: _modules, ...summary } = detail;
 
   return {
-    ...flat[index],
+    ...target,
     course: summary,
-    modules,
+    modules: detail.modules,
     prev: index > 0 ? toRef(flat[index - 1]) : null,
     next: index < flat.length - 1 ? toRef(flat[index + 1]) : null,
   };

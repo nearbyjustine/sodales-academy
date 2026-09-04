@@ -28,7 +28,7 @@ export default async function LessonPage({ params }: PageProps) {
   const { courseSlug, lessonSlug } = await params;
   const session = await requireUser();
 
-  const lesson = await getLesson(courseSlug, lessonSlug);
+  const lesson = await getLesson(courseSlug, lessonSlug, { userId: session.userId });
   if (!lesson) notFound();
 
   const lessonIds = lesson.modules.flatMap((m) => m.lessons.map((l) => l.id));

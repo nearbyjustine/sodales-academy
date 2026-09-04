@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, lesson, userProfile } from "@/db/schema";
+import { course, courseModule, enrollment, lesson, userProfile } from "@/db/schema";
 import { getCourses, getCourseBySlug, getLesson, getCatalogStats } from "./queries";
 
 const TEST_INSTRUCTOR = "test-instructor-id";
+const TEST_LEARNER = "queries-test-enrolled-learner";
 
 beforeAll(async () => {
   await db
@@ -63,6 +64,8 @@ beforeAll(async () => {
       isPreview: false,
     },
   ]);
+
+  await db.insert(enrollment).values({ courseId: publishedCourse.id, userId: TEST_LEARNER });
 });
 
 afterAll(async () => {
@@ -99,8 +102,30 @@ describe("getCourseBySlug", () => {
 });
 
 describe("getLesson", () => {
-  it("returns navigation and full content", async () => {
-    const result = await getLesson("queries-test-course", "second-lesson");
+  it("returns navigation and full content for a preview lesson with no viewer", async () => {
+    const result = await getLesson("queries-test-course", "first-lesson", null);
+    expect(result).not.toBeNull();
+    expect(result!.next!.slug).toBe("second-lesson");
+    expect(result!.prev).toBeNull();
+    expect(result!.content).toBe("x".repeat(60));
+  });
+
+  it("returns null for a non-preview lesson with no viewer", async () => {
+    const result = await getLesson("queries-test-course", "second-lesson", null);
+    expect(result).toBeNull();
+  });
+
+  it("returns null for a non-preview lesson with an unenrolled viewer", async () => {
+    const result = await getLesson("queries-test-course", "second-lesson", {
+      userId: "queries-test-unenrolled-learner",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("returns navigation and full content for a non-preview lesson with an enrolled viewer", async () => {
+    const result = await getLesson("queries-test-course", "second-lesson", {
+      userId: TEST_LEARNER,
+    });
     expect(result).not.toBeNull();
     expect(result!.prev!.slug).toBe("first-lesson");
     expect(result!.next).toBeNull();
