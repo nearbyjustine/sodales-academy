@@ -1,10 +1,19 @@
 import "server-only";
-import { eq, and, or, ilike, asc, inArray, count } from "drizzle-orm";
+import { eq, and, or, ilike, asc, inArray, count, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
+import { course, courseModule, enrollment, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
 import type { Session } from "@/lib/session";
 import { canManageCourse } from "./authz";
-import type { CourseDetail, CourseModule, CourseSummary, Lesson, Level } from "./types";
+import type {
+  CourseDetail,
+  CourseModule,
+  CourseSummary,
+  Lesson,
+  Level,
+  TrackCourse,
+  TrackDetail,
+  TrackSummary,
+} from "./types";
 
 export type LessonRef = { courseSlug: string; slug: string; title: string };
 
@@ -237,4 +246,115 @@ async function toDetail(row: typeof course.$inferSelect): Promise<CourseDetail> 
 
 function toRef(lesson: Lesson): LessonRef {
   return { courseSlug: lesson.courseSlug, slug: lesson.slug, title: lesson.title };
+}
+
+/** A track is visible to a non-admin only once published. Admins see drafts so
+ *  they can preview a track before releasing it — the same rule
+ *  `getCourseBySlug`/`getCourseBySlugForAdmin` split on for courses. */
+function canSeeDraftTracks(viewer?: Session | null): boolean {
+  return viewer?.role === "admin";
+}
+
+/**
+ * Two queries total regardless of how many tracks or courses exist: one for the
+ * tracks, one grouped aggregate for their counts. Do not turn this into a
+ * per-track lookup.
+ */
+async function toTrackSummaries(rows: (typeof track.$inferSelect)[]): Promise<TrackSummary[]> {
+  if (rows.length === 0) return [];
+
+  const trackIds = rows.map((r) => r.id);
+
+  const counts = await db
+    .select({
+      trackId: trackCourse.trackId,
+      courseCount: sql<number>`count(distinct ${trackCourse.courseId})`.mapWith(Number),
+      lessonCount: sql<number>`count(${lesson.id})`.mapWith(Number),
+    })
+    .from(trackCourse)
+    .leftJoin(lesson, eq(lesson.courseId, trackCourse.courseId))
+    .where(inArray(trackCourse.trackId, trackIds))
+    .groupBy(trackCourse.trackId);
+
+  const byTrackId = new Map(counts.map((c) => [c.trackId, c]));
+
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    promise: row.promise,
+    outcome: row.outcome,
+    status: row.status,
+    position: row.position,
+    courseCount: byTrackId.get(row.id)?.courseCount ?? 0,
+    lessonCount: byTrackId.get(row.id)?.lessonCount ?? 0,
+  }));
+}
+
+export async function getTracks(): Promise<TrackSummary[]> {
+  const rows = await db
+    .select()
+    .from(track)
+    .where(eq(track.status, "published"))
+    .orderBy(asc(track.position), asc(track.id));
+  return toTrackSummaries(rows);
+}
+
+/**
+ * Admin/instructor track listing. Unlike `getAllCourses(viewer)` this is not
+ * ownership-scoped: a track can contain courses owned by several instructors,
+ * so there is no coherent single owner. Tracks are admin-managed — the caller
+ * calls `requireRole("admin")` itself and passes the session in.
+ */
+export async function getTracksForAdmin(viewer: Session): Promise<TrackSummary[]> {
+  if (viewer.role !== "admin") return [];
+  const rows = await db.select().from(track).orderBy(asc(track.position), asc(track.id));
+  return toTrackSummaries(rows);
+}
+
+export async function getTrackBySlug(
+  slug: string,
+  viewer?: Session | null,
+): Promise<TrackDetail | null> {
+  const [row] = await db.select().from(track).where(eq(track.slug, slug));
+  if (!row) return null;
+  if (row.status !== "published" && !canSeeDraftTracks(viewer)) return null;
+
+  const links = await db
+    .select({ courseId: trackCourse.courseId, position: trackCourse.position })
+    .from(trackCourse)
+    .where(eq(trackCourse.trackId, row.id))
+    .orderBy(asc(trackCourse.position), asc(trackCourse.courseId));
+
+  const [summary] = await toTrackSummaries([row]);
+  if (links.length === 0) return { ...summary, courses: [] };
+
+  const courseIds = links.map((l) => l.courseId);
+
+  // Reuses the existing batched helper — one grouped lesson count and one
+  // instructor-name lookup for the whole set, not per course.
+  const courseRows = await db.select().from(course).where(inArray(course.id, courseIds));
+  const summaries = await toSummariesWithCounts(courseRows);
+  const summaryById = new Map(summaries.map((s) => [s.id, s]));
+
+  // The viewer's completion per course, as one grouped query. Signed-out
+  // viewers skip it entirely rather than querying for a user id that is null.
+  const completionByCourseId = new Map<string, number>();
+  if (viewer) {
+    const completions = await db
+      .select({ courseId: lesson.courseId, value: count() })
+      .from(lessonProgress)
+      .innerJoin(lesson, eq(lesson.id, lessonProgress.lessonId))
+      .where(and(eq(lessonProgress.userId, viewer.userId), inArray(lesson.courseId, courseIds)))
+      .groupBy(lesson.courseId);
+    for (const c of completions) completionByCourseId.set(c.courseId, c.value);
+  }
+
+  const courses: TrackCourse[] = links.flatMap((link) => {
+    const s = summaryById.get(link.courseId);
+    if (!s) return [];
+    return [{ ...s, position: link.position, completedLessonCount: completionByCourseId.get(link.courseId) ?? 0 }];
+  });
+
+  return { ...summary, courses };
 }
