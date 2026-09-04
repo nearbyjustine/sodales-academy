@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
 import { requireRole, requireUser } from "@/lib/session";
-import { courseInputSchema, type CourseInput } from "@/lib/validation";
+import { courseInputSchema, type CourseInput, trackInputSchema, type TrackInput } from "@/lib/validation";
 import { assertCanManageCourse, canManageCourse } from "./authz";
 import { isEnrolled } from "./queries";
 
@@ -338,5 +338,151 @@ export async function enrollInTrack(trackSlug: string): Promise<MutationResult> 
 
   revalidatePath(`/tracks/${trackSlug}`);
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Tracks are ADMIN-managed, not instructor-managed, and that is a deliberate
+ * narrowing of the rule the course mutations use. `assertCanManageCourse`
+ * answers "does this viewer own this course"; a track can contain courses owned
+ * by several different instructors, so there is no coherent single owner to
+ * check. Letting any contributing instructor edit the track would let them
+ * reorder or remove a peer's course; requiring they own all of them makes most
+ * tracks uneditable. Revisit only with a real `track.owner_user_id`.
+ */
+
+export async function createTrack(input: TrackInput): Promise<MutationResult> {
+  await requireRole("admin");
+
+  const parsed = trackInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid track." };
+  }
+  const data = parsed.data;
+
+  const [existing] = await db.select({ id: track.id }).from(track).where(eq(track.slug, data.slug));
+  if (existing) return { ok: false, message: "A track with that slug already exists." };
+
+  // No transactions on neon-http — insert the track, then its courses. A crash
+  // between the two leaves an empty draft track, which an admin can see and fix.
+  const [row] = await db
+    .insert(track)
+    .values({
+      slug: data.slug,
+      title: data.title,
+      promise: data.promise,
+      outcome: data.outcome,
+      position: data.position,
+      status: "draft",
+    })
+    .returning({ id: track.id });
+
+  if (data.courseIds.length > 0) {
+    await db
+      .insert(trackCourse)
+      .values(data.courseIds.map((courseId, i) => ({ trackId: row.id, courseId, position: i })))
+      .onConflictDoNothing();
+  }
+
+  revalidatePath("/admin/tracks");
+  revalidatePath("/tracks");
+  return { ok: true };
+}
+
+export async function updateTrack(trackId: string, input: TrackInput): Promise<MutationResult> {
+  await requireRole("admin");
+
+  const parsed = trackInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid track." };
+  }
+  const data = parsed.data;
+
+  const [row] = await db.select({ id: track.id }).from(track).where(eq(track.id, trackId));
+  if (!row) return { ok: false, message: "Track not found." };
+
+  await db
+    .update(track)
+    .set({
+      slug: data.slug,
+      title: data.title,
+      promise: data.promise,
+      outcome: data.outcome,
+      position: data.position,
+      updatedAt: new Date(),
+    })
+    .where(eq(track.id, trackId));
+
+  // Reconcile membership by courseId rather than delete-and-reinsert. These rows
+  // carry no learner data so a rebuild would be survivable, but `updateCourse`
+  // established the pattern for a reason and diverging invites someone to copy
+  // the wrong one back into a table where it does matter.
+  const existingLinks = await db
+    .select({ id: trackCourse.id, courseId: trackCourse.courseId })
+    .from(trackCourse)
+    .where(eq(trackCourse.trackId, trackId));
+
+  const submitted = new Set(data.courseIds);
+  const existingByCourseId = new Map(existingLinks.map((l) => [l.courseId, l]));
+
+  for (const link of existingLinks) {
+    if (!submitted.has(link.courseId)) {
+      await db.delete(trackCourse).where(eq(trackCourse.id, link.id));
+    }
+  }
+
+  for (const [i, courseId] of data.courseIds.entries()) {
+    const existingLink = existingByCourseId.get(courseId);
+    if (existingLink) {
+      await db.update(trackCourse).set({ position: i }).where(eq(trackCourse.id, existingLink.id));
+    } else {
+      await db.insert(trackCourse).values({ trackId, courseId, position: i }).onConflictDoNothing();
+    }
+  }
+
+  revalidatePath("/admin/tracks");
+  revalidatePath(`/tracks/${data.slug}`);
+  revalidatePath("/tracks");
+  return { ok: true };
+}
+
+async function setTrackStatus(
+  trackId: string,
+  status: "draft" | "published",
+): Promise<MutationResult> {
+  await requireRole("admin");
+
+  const [row] = await db.select({ slug: track.slug }).from(track).where(eq(track.id, trackId));
+  if (!row) return { ok: false, message: "Track not found." };
+
+  await db.update(track).set({ status, updatedAt: new Date() }).where(eq(track.id, trackId));
+
+  revalidatePath("/admin/tracks");
+  revalidatePath(`/tracks/${row.slug}`);
+  revalidatePath("/tracks");
+  return { ok: true };
+}
+
+export async function publishTrack(trackId: string): Promise<MutationResult> {
+  return setTrackStatus(trackId, "published");
+}
+
+export async function unpublishTrack(trackId: string): Promise<MutationResult> {
+  return setTrackStatus(trackId, "draft");
+}
+
+export async function deleteTrack(trackId: string): Promise<MutationResult> {
+  await requireRole("admin");
+
+  const [row] = await db.select({ id: track.id }).from(track).where(eq(track.id, trackId));
+  if (!row) return { ok: false, message: "Track not found." };
+
+  // CASCADE removes `track_course` only. `enrollment` and `lesson_progress` are
+  // keyed to courses, so no learner loses progress when a track is deleted —
+  // asserted in track-admin-mutations.test.ts rather than assumed.
+  await db.delete(track).where(eq(track.id, trackId));
+
+  revalidatePath("/admin/tracks");
+  revalidatePath("/tracks");
   return { ok: true };
 }

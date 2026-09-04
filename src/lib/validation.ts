@@ -74,3 +74,20 @@ export const courseInputSchema = z
   });
 
 export type CourseInput = z.infer<typeof courseInputSchema>;
+
+export const trackInputSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(1, "Slug is required.")
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens."),
+  title: z.string().trim().min(1, "Title is required."),
+  promise: z.string().trim().min(1, "Promise is required."),
+  // This is the sentence someone reads before paying. It is author-supplied and
+  // unverifiable by the app, so the only thing enforced here is that it exists.
+  outcome: z.string().trim().min(1, "Outcome is required."),
+  position: z.number().int().min(0),
+  courseIds: z.array(z.string().uuid()),
+});
+
+export type TrackInput = z.infer<typeof trackInputSchema>;
