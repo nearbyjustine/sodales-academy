@@ -351,7 +351,9 @@ sketch):** `createNeonAuth` lives at `@neondatabase/auth/next/server`, not the p
 config is `{ baseUrl, cookies: { secret, ... } }` — note lowercase `baseUrl`, and `cookies.secret`
 (≥32 chars) is required and runtime-validated, contrary to the Prerequisites section's original
 (wrong) claim that no local SDK secret was needed. `auth.handler` is a **method**
-(`auth.handler()`), not a destructurable property. `neon-auth-codemod` only migrates legacy UI
+(`auth.handler()`) returning an object of named per-verb handlers
+(`{ GET, POST, PUT, DELETE, PATCH }`), not a single callable usable for every method — destructure
+it, don't assign one function to multiple exports. `neon-auth-codemod` only migrates legacy UI
 import paths — it does not scaffold `server.ts` or any config for you.
 
 - [ ] **Step 1: Install the package**
@@ -396,16 +398,12 @@ Create `src/app/api/auth/[...path]/route.ts`:
 ```ts
 import { auth } from "@/lib/auth/server";
 
-const handler = auth.handler();
-
-export const GET = handler;
-export const POST = handler;
+export const { GET, POST } = auth.handler();
 ```
 
-`auth.handler` is a method that returns the actual Next.js route handler, not a
-`{ GET, POST }` object itself — confirm this against the installed version's types if it doesn't
-match (`auth.handler()`'s return type should satisfy Next's route handler signature for both
-methods; if it returns something more specific per-verb, adjust accordingly).
+Confirm `auth.handler()`'s exact return shape against the installed version's types if this
+doesn't typecheck — it's a factory method returning per-verb handlers
+(`{ GET, POST, PUT, DELETE, PATCH }`), not a single function assignable to multiple exports.
 
 - [ ] **Step 4: Typecheck and build**
 
