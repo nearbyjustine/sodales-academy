@@ -1485,7 +1485,7 @@ falling back to \"Unknown instructor\" if no profile matches yet."
 
 **Files:**
 - Create: `src/db/seed.ts`, `src/db/seed.test.ts`, `src/db/seed-cli.ts`
-- Modify: `package.json` (adds the `db:seed` script and the `tsx` dev dependency)
+- Modify: `package.json` (adds the `db:seed` script and the `tsx`/`dotenv-cli` dev dependencies)
 
 **Interfaces:**
 - Consumes: `db`, full schema (Tasks 1-2), `loadAllCourses` (still exists at this point — deleted
@@ -1683,10 +1683,19 @@ per the note in Step 3.
 
 - [ ] **Step 5: Add a CLI entry point**
 
+`seed-cli.ts` runs as a bare script, outside Next.js's automatic `.env.local` loading — Task 2's
+implementer hit exactly this gap with `drizzle-kit` and had to manually `source .env.local` as a
+one-off workaround. Fix it properly here instead of leaving every future CLI script (and everyone
+who ever runs `pnpm db:seed`) to rediscover the same problem: use `dotenv-cli`.
+
+```bash
+pnpm add -D dotenv-cli
+```
+
 Add to `package.json` scripts:
 
 ```json
-"db:seed": "tsx src/db/seed-cli.ts"
+"db:seed": "dotenv -e .env.local -- tsx src/db/seed-cli.ts"
 ```
 
 Create `src/db/seed-cli.ts`:
