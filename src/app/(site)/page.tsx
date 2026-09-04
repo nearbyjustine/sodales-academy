@@ -1,17 +1,43 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { CourseArtwork } from "@/components/brand/course-artwork";
-import { Badge } from "@/components/ui/badge";
+import { TrackRow } from "@/components/track/track-row";
 import { ButtonLink } from "@/components/ui/button-link";
-import { getCatalogStats, getCourses } from "@/lib/content/queries";
+import { getCatalogStats, getTracks } from "@/lib/content/queries";
+
+export const metadata: Metadata = {
+  title: "Sodales Academy",
+  description:
+    "Ordered tracks in freelancing, branding, and web development. Each one ends in a stated capability.",
+};
+
+/**
+ * The rhythm section is fixed copy, not derived data. It describes how the
+ * Academy is actually run — if that changes, this changes. It deliberately
+ * makes no claim about outcomes, graduates, or how long anything takes for a
+ * given person.
+ */
+const RHYTHM = [
+  {
+    label: "Read",
+    body: "Each lesson is written to be finished in one sitting, not skimmed across a week.",
+  },
+  {
+    label: "Build",
+    body: "Every course produces something real. You are not collecting notes, you are collecting work.",
+  },
+  {
+    label: "Mark it done",
+    body: "Progress is yours and it persists. Pick up exactly where you stopped, on any device.",
+  },
+];
 
 export default async function Home() {
-  const [stats, courses] = await Promise.all([getCatalogStats(), getCourses()]);
-  const categories = Array.from(new Set(courses.map((c) => c.category)));
-  const featured = courses.slice(0, 3);
+  const [stats, tracks] = await Promise.all([getCatalogStats(), getTracks()]);
+  const lead = tracks[0] ?? null;
 
   return (
     <>
-      {/* Hero */}
+      {/* 1. The promise, with one real track previewed rather than described */}
       <section className="mx-auto grid max-w-6xl gap-10 px-4 py-20 md:grid-cols-2 md:py-28">
         <div className="flex flex-col gap-6">
           <p className="label-eyebrow text-violet">Sodales Academy</p>
@@ -19,42 +45,58 @@ export default async function Home() {
             Learn the craft. Ship the work.
           </h1>
           <p className="max-w-md text-lg text-graphite">
-            Practical courses in freelancing, branding, and web development, built by the
-            Sodales collective for the team members shipping it.
+            {lead
+              ? "Ordered tracks, not a pile of videos. Start at lesson one and finish able to do the thing the track names."
+              : "Practical courses in freelancing, branding, and web development, built by the Sodales collective."}
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
-            <ButtonLink href="/courses">Browse courses</ButtonLink>
-            <ButtonLink variant="outline" href="/dashboard">
-              View dashboard
+            {lead ? (
+              <ButtonLink href={`/tracks/${lead.slug}`}>See the {lead.title} track</ButtonLink>
+            ) : (
+              <ButtonLink href="/courses">Browse courses</ButtonLink>
+            )}
+            <ButtonLink variant="outline" href="/courses">
+              Browse all courses
             </ButtonLink>
           </div>
         </div>
 
         <div className="relative isolate min-h-64 overflow-hidden rounded-md border border-border">
           <div className="absolute inset-0 -z-10">
-            <CourseArtwork seed="sodales-academy" lessonCount={9} />
+            <CourseArtwork
+              seed={lead?.slug ?? "sodales-academy"}
+              lessonCount={lead?.lessonCount ?? 9}
+            />
           </div>
-          {/* Scrim: the tagline has to stay readable wherever a light band
-              happens to fall behind it. */}
           <div
             aria-hidden="true"
             className="absolute inset-0 -z-10 bg-linear-to-t from-obsidian/95 via-obsidian/40 to-transparent"
           />
-          <div className="flex h-full items-end p-10 text-ivory">
-            <p className="text-3xl leading-tight font-bold tracking-tight">
-              Creative Intelligence. Collective Impact.
-            </p>
+          <div className="flex h-full flex-col justify-end gap-3 p-10 text-ivory">
+            {lead ? (
+              <>
+                <p className="label-eyebrow text-violet-accessible">Track</p>
+                <p className="text-3xl leading-tight font-bold tracking-tight">{lead.title}</p>
+                <p className="text-ivory/70">
+                  {lead.courseCount} courses · {lead.lessonCount} lessons
+                </p>
+              </>
+            ) : (
+              <p className="text-3xl leading-tight font-bold tracking-tight">
+                Creative Intelligence. Collective Impact.
+              </p>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Live stats */}
+      {/* Live catalog counts — the only numbers on this page, and all real */}
       <section className="border-y border-border">
         <div className="mx-auto grid max-w-6xl divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {[
+            { label: "Tracks", value: tracks.length },
             { label: "Courses", value: stats.courses },
             { label: "Lessons", value: stats.lessons },
-            { label: "Categories", value: stats.categories },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col gap-1 px-4 py-10 text-center">
               <span className="text-5xl font-bold tracking-tight">{stat.value}</span>
@@ -64,66 +106,60 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Learning tracks */}
+      {/* 2. Pick your climb. Rendered only when there is something to pick — an
+          empty grid of slots reads as broken and costs more trust than omitting
+          the section entirely. */}
+      {tracks.length > 0 ? (
+        <section className="mx-auto max-w-6xl px-4 py-20">
+          <h2 className="text-3xl font-bold tracking-tight">Pick your climb</h2>
+          <p className="mt-3 max-w-xl text-graphite">
+            Each track is an ordered path through several courses. The order is the point.
+          </p>
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {tracks.map((track) => (
+              <TrackRow key={track.slug} track={track} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* 3. What the week-to-week rhythm actually is */}
       <section className="mx-auto max-w-6xl px-4 py-20">
-        <h2 className="text-3xl font-bold tracking-tight">Learning tracks</h2>
+        <h2 className="text-3xl font-bold tracking-tight">What it&apos;s actually like</h2>
         <ul className="mt-8 divide-y divide-border border-t border-border">
-          {categories.map((category, index) => (
-            <li key={category}>
-              <Link
-                href={`/courses?q=${encodeURIComponent(category)}`}
-                className="group/track flex items-center gap-6 py-6 outline-none focus-visible:ring-2 focus-visible:ring-violet"
-              >
-                <span className="label-eyebrow text-graphite">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span className="text-xl font-bold group-hover/track:text-violet">
-                  {category}
-                </span>
-              </Link>
+          {RHYTHM.map((item, index) => (
+            <li key={item.label} className="flex flex-col gap-2 py-6 md:flex-row md:gap-8">
+              <span className="label-eyebrow shrink-0 text-graphite md:w-12">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="shrink-0 text-xl font-bold md:w-48">{item.label}</span>
+              <p className="max-w-xl text-graphite">{item.body}</p>
             </li>
           ))}
         </ul>
       </section>
 
-      {/* Featured courses */}
-      <section className="mx-auto max-w-6xl px-4 py-20">
-        <h2 className="text-3xl font-bold tracking-tight">Featured courses</h2>
-        <ul className="mt-8 divide-y divide-border border-t border-border">
-          {featured.map((course) => (
-            <li key={course.slug}>
-              <Link
-                href={`/courses/${course.slug}`}
-                className="flex flex-col gap-4 py-6 outline-none focus-visible:ring-2 focus-visible:ring-violet md:flex-row md:items-center md:justify-between md:gap-6"
-              >
-                <div className="h-20 w-28 shrink-0 overflow-hidden rounded-md">
-                  <CourseArtwork seed={course.slug} lessonCount={course.lessonCount} />
-                </div>
+      {/* 4. What you walk away with — the lead track's real outcome copy */}
+      {lead ? (
+        <section className="bg-deep-ink text-ivory">
+          <div className="mx-auto max-w-6xl px-4 py-20">
+            <p className="label-eyebrow text-violet-accessible">What you walk away with</p>
+            <p className="mt-4 max-w-3xl text-3xl leading-tight font-bold tracking-tight md:text-4xl">
+              {lead.outcome}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
-                <div className="flex flex-1 flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="capitalize">
-                      {course.level}
-                    </Badge>
-                    <span className="label-eyebrow text-graphite">
-                      {course.lessonCount} lessons
-                    </span>
-                  </div>
-                  <span className="text-xl font-bold">{course.title}</span>
-                  <p className="max-w-xl text-graphite">{course.description}</p>
-                </div>
-                <span className="label-eyebrow shrink-0 text-violet">View course</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* CTA band */}
+      {/* 5. Request a seat */}
       <section className="bg-obsidian text-ivory">
         <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-20">
-          <h2 className="text-3xl font-bold tracking-tight">Ready to get started?</h2>
-          <ButtonLink href="/courses">Browse courses</ButtonLink>
+          <h2 className="text-3xl font-bold tracking-tight">Ready to start?</h2>
+          <p className="max-w-xl text-ivory/70">
+            Seats are issued by invite code. If you have one, sign up and it&apos;ll let you
+            through.
+          </p>
+          <ButtonLink href="/sign-up">I have an invite code</ButtonLink>
         </div>
       </section>
     </>
