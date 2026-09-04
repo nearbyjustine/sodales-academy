@@ -10,6 +10,10 @@
  * Everything here is pure and seeded by the course slug: the same course always
  * gets the same cover, and a new course gets art the moment it exists — no
  * upload step, no blank state.
+ *
+ * Tracks reuse this generator unchanged, seeded by the track slug and its total
+ * lesson count. A track therefore gets art in the same visual language as its
+ * courses without being mistakable for any one of them (spec open decision #3).
  */
 
 export const MARK_SHEAR_DEG = 26.2;

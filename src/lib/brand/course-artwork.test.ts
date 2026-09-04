@@ -79,4 +79,18 @@ describe("courseArtwork", () => {
       }
     }
   });
+
+  it("gives a track a different cover from any of its courses", () => {
+    // Tracks reuse this generator seeded by the TRACK slug. A track whose art
+    // happened to match one of its member courses would read as a duplicate, so
+    // this locks in that the seed space separates them.
+    const trackArt = courseArtwork("freelance-brand-designer", 12);
+    const courseArt = courseArtwork("brand-identity-essentials", 4);
+    expect(trackArt.bands).not.toEqual(courseArt.bands);
+  });
+
+  it("keeps a high-lesson-count track at the legible band ceiling", () => {
+    // A 60-lesson track must not render 60 bands.
+    expect(courseArtwork("big-track", 60).bands).toHaveLength(9);
+  });
 });
