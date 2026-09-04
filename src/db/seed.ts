@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, lesson, userProfile } from "@/db/schema";
 import { loadAllCourses } from "@/lib/content/loader";
@@ -15,16 +15,23 @@ import { loadAllCourses } from "@/lib/content/loader";
 
 /**
  * One-time migration: import Phase 1's Markdown course fixtures into Postgres, and promote
- * `ADMIN_EMAIL` to `admin`. Safe to re-run (both halves are idempotent).
+ * `ADMIN_EMAIL` to `admin`. Safe to re-run — including after a crash mid-course, not just before
+ * any insert has happened.
  *
  * NOT wrapped in `db.transaction(...)`, despite spec §7 describing "a single transaction" —
  * `src/db/index.ts` connects via `drizzle-orm/neon-http`, and that driver's `NeonHttpSession`
  * throws `"No transactions support in neon-http driver"` synchronously the moment `.transaction()`
  * is called (`node_modules/drizzle-orm/neon-http/session.cjs`, confirmed by reading the compiled
  * session class — not just the `.d.ts`, since the type signature alone doesn't reveal the runtime
- * throw). `drizzle-kit`'s own migrator docs carry the same caveat for this driver. Each insert
- * below is instead individually idempotent (existing-row checks before every write), which is the
- * closest available substitute for transactional safety over HTTP.
+ * throw). `drizzle-kit`'s own migrator docs carry the same caveat for this driver.
+ *
+ * Because there's no transaction, a crash between two inserts is a real possibility (e.g. after a
+ * course row and 2 of its 3 modules land, before the third module's lessons do), so idempotency is
+ * enforced at every level, not just per-course: `getOrCreateCourse`/`getOrCreateModule` check for
+ * an existing row before inserting, and the lesson insert leans on `lesson`'s real
+ * `unique(course_id, slug)` constraint via `onConflictDoNothing()`. A re-run after a partial crash
+ * resumes and fills in whatever's missing, rather than seeing the course row exists and skipping
+ * the rest of it.
  */
 export async function runSeed(): Promise<{ coursesImported: number; lessonsImported: number }> {
   await promoteAdmin();
@@ -35,45 +42,74 @@ export async function runSeed(): Promise<{ coursesImported: number; lessonsImpor
   let lessonsImported = 0;
 
   for (const c of courses) {
-    const [existing] = await db.select({ id: course.id }).from(course).where(eq(course.slug, c.slug));
-    if (existing) continue; // idempotent — already imported
-
-    const [insertedCourse] = await db
-      .insert(course)
-      .values({
-        slug: c.slug,
-        title: c.title,
-        description: c.description,
-        category: c.category,
-        level: c.level,
-        status: c.status,
-        instructorUserId,
-      })
-      .returning();
-    coursesImported++;
+    const { id: courseId, wasCreated } = await getOrCreateCourse(c, instructorUserId);
+    if (wasCreated) coursesImported++;
 
     for (const m of c.modules) {
-      const [insertedModule] = await db
-        .insert(courseModule)
-        .values({ courseId: insertedCourse.id, title: m.title, position: m.position })
-        .returning();
+      const moduleId = await getOrCreateModule(courseId, m);
 
       for (const l of m.lessons) {
-        await db.insert(lesson).values({
-          moduleId: insertedModule.id,
-          courseId: insertedCourse.id,
-          slug: l.slug,
-          title: l.title,
-          content: l.content,
-          position: l.position,
-          isPreview: l.isPreview,
-        });
-        lessonsImported++;
+        const [insertedLesson] = await db
+          .insert(lesson)
+          .values({
+            moduleId,
+            courseId,
+            slug: l.slug,
+            title: l.title,
+            content: l.content,
+            position: l.position,
+            isPreview: l.isPreview,
+          })
+          .onConflictDoNothing() // idempotent — backed by lesson's unique(course_id, slug)
+          .returning({ id: lesson.id });
+        if (insertedLesson) lessonsImported++;
       }
     }
   }
 
   return { coursesImported, lessonsImported };
+}
+
+async function getOrCreateCourse(
+  c: Awaited<ReturnType<typeof loadAllCourses>>[number],
+  instructorUserId: string,
+): Promise<{ id: string; wasCreated: boolean }> {
+  const [existing] = await db.select({ id: course.id }).from(course).where(eq(course.slug, c.slug));
+  if (existing) return { id: existing.id, wasCreated: false };
+
+  const [insertedCourse] = await db
+    .insert(course)
+    .values({
+      slug: c.slug,
+      title: c.title,
+      description: c.description,
+      category: c.category,
+      level: c.level,
+      status: c.status,
+      instructorUserId,
+    })
+    .returning();
+  return { id: insertedCourse.id, wasCreated: true };
+}
+
+async function getOrCreateModule(
+  courseId: string,
+  m: { title: string; position: number },
+): Promise<string> {
+  // course_module has no unique constraint to back onConflictDoNothing() — the loader guarantees
+  // module titles are unique within a course (they're the grouping key lessons are bucketed by),
+  // so an explicit existence check on (courseId, title) is the equivalent idempotency guard.
+  const [existing] = await db
+    .select({ id: courseModule.id })
+    .from(courseModule)
+    .where(and(eq(courseModule.courseId, courseId), eq(courseModule.title, m.title)));
+  if (existing) return existing.id;
+
+  const [insertedModule] = await db
+    .insert(courseModule)
+    .values({ courseId, title: m.title, position: m.position })
+    .returning();
+  return insertedModule.id;
 }
 
 /**
