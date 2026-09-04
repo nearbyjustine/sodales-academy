@@ -1,6 +1,5 @@
 "use client";
 
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 function GoogleGlyph() {
@@ -26,14 +25,20 @@ function GoogleGlyph() {
   );
 }
 
-export function GoogleButton() {
+export function GoogleButton({
+  disabled = false,
+  callbackURL = "/dashboard",
+}: {
+  disabled?: boolean;
+  callbackURL?: string;
+}) {
+  async function handleClick() {
+    const { authClient } = await import("@/lib/auth/client");
+    await authClient.signIn.social({ provider: "google", callbackURL });
+  }
+
   return (
-    <Button
-      type="button"
-      variant="outline"
-      className="w-full"
-      onClick={() => toast.info("Sign-in isn't wired up yet.")}
-    >
+    <Button type="button" variant="outline" className="w-full" disabled={disabled} onClick={handleClick}>
       <GoogleGlyph />
       Continue with Google
     </Button>

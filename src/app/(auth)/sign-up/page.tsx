@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { GoogleButton } from "@/components/auth/google-button";
-import { InviteCodeForm } from "@/components/auth/invite-code-form";
+import { SignUpFlow } from "@/components/auth/sign-up-flow";
 
 export const metadata: Metadata = { title: "Sign up" };
 
@@ -13,15 +12,7 @@ export default function SignUpPage() {
         <p className="mt-2 text-graphite">Team members sign up with an invite code.</p>
       </div>
 
-      <GoogleButton />
-
-      <div className="flex items-center gap-3">
-        <span aria-hidden="true" className="h-px flex-1 bg-border" />
-        <span className="label-eyebrow text-graphite">or</span>
-        <span aria-hidden="true" className="h-px flex-1 bg-border" />
-      </div>
-
-      <InviteCodeForm />
+      <SignUpFlow />
 
       <p className="text-sm text-graphite">
         Already have an account?{" "}

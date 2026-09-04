@@ -5,21 +5,30 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { verifyInviteCode } from "@/app/actions/verify-invite-code";
 
-export function InviteCodeForm() {
+export function InviteCodeForm({ onVerified }: { onVerified: () => void }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [verified, setVerified] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setPending(true);
 
-    if (code.trim() === "") {
-      setError("Enter your invite code.");
+    const result = await verifyInviteCode(code);
+
+    setPending(false);
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
 
     setError(null);
-    toast.info("Sign-in isn't wired up yet.");
+    setVerified(true);
+    toast.success("Invite code accepted — continue with Google below.");
+    onVerified();
   }
 
   return (
@@ -30,6 +39,7 @@ export function InviteCodeForm() {
           id="invite-code"
           value={code}
           onChange={(event) => setCode(event.target.value)}
+          disabled={verified}
           aria-invalid={error ? true : undefined}
           aria-describedby="invite-code-help"
         />
@@ -42,8 +52,8 @@ export function InviteCodeForm() {
           </p>
         ) : null}
       </div>
-      <Button type="submit" className="w-full">
-        Join with invite code
+      <Button type="submit" className="w-full" disabled={pending || verified}>
+        {verified ? "Code accepted" : pending ? "Checking…" : "Continue"}
       </Button>
     </form>
   );
