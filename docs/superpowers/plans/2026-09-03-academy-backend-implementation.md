@@ -797,8 +797,20 @@ pnpm dev
 
 Open `/sign-up`. Confirm: **Continue with Google** starts disabled; submitting a wrong code shows
 an inline error and the button stays disabled; submitting a code that exists in `invite_code`
-(insert one manually via `psql`/Neon console for this manual check, since Task 9 hasn't seeded
-one yet) enables the button and clicking it redirects toward Google's OAuth screen.
+enables the button and clicking it redirects toward Google's OAuth screen.
+
+To insert a code for this manual check (Task 9 hasn't seeded one yet), match
+`verifyInviteCode`'s exact normalization (`sha256(code.trim().toLowerCase())`) — a hash computed
+without lowercasing/trimming won't match even if the code "looks right":
+
+```bash
+CODE="choose-a-code"
+echo -n "$CODE" | tr '[:upper:]' '[:lower:]' | shasum -a 256 | cut -d' ' -f1
+```
+
+```sql
+INSERT INTO invite_code (code_hash) VALUES ('<the hex output above>'); -- via psql/Neon console
+```
 
 - [ ] **Step 6: Commit**
 
@@ -2719,9 +2731,9 @@ that all 5 courses (4 published + `test-fixture-course` as a draft) are present 
 
 If `pnpm db:seed` fails because `ADMIN_EMAIL` (`nearbyjustine@gmail.com`) hasn't signed up yet
 (Task 9's `resolveInstructorUserId` needs at least one `user_profile` row to exist), stop and sign
-up for real through `/sign-up` first — insert a real invite code directly if none exists yet
-(`INSERT INTO invite_code (code_hash) VALUES ('<sha256 hex of a code you choose>');`, same hashing
-`verifyInviteCode` in Task 4 uses) — then re-run `pnpm db:seed`.
+up for real through `/sign-up` first — insert a real invite code directly if none exists yet, the
+same way as Task 5's manual check (matching `verifyInviteCode`'s exact hash normalization) — then
+re-run `pnpm db:seed`.
 
 - [ ] **Step 2: Confirm nothing still imports the files being deleted**
 
