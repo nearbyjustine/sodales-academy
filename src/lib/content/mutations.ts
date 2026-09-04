@@ -401,6 +401,14 @@ export async function updateTrack(trackId: string, input: TrackInput): Promise<M
   const [row] = await db.select({ id: track.id }).from(track).where(eq(track.id, trackId));
   if (!row) return { ok: false, message: "Track not found." };
 
+  const [slugConflict] = await db
+    .select({ id: track.id })
+    .from(track)
+    .where(eq(track.slug, data.slug));
+  if (slugConflict && slugConflict.id !== trackId) {
+    return { ok: false, message: "That slug is already in use." };
+  }
+
   await db
     .update(track)
     .set({

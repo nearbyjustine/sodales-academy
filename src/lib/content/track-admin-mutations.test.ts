@@ -160,4 +160,72 @@ describe("track admin mutations", () => {
     expect(await unpublishTrack(bogusId)).toEqual({ ok: false, message: "Track not found." });
     expect(await deleteTrack(bogusId)).toEqual({ ok: false, message: "Track not found." });
   });
+
+  it("refuses to rename a track onto another track's slug, leaving the target unchanged", async () => {
+    mockRequireRole.mockResolvedValue(admin);
+    await createTrack(input(`${P}-slug-a`, courseIds));
+    await createTrack(input(`${P}-slug-b`, courseIds));
+    const [rowB] = await db.select().from(track).where(eq(track.slug, `${P}-slug-b`));
+
+    const result = await updateTrack(rowB.id, {
+      slug: `${P}-slug-a`,
+      title: "renamed",
+      promise: "p",
+      outcome: "o",
+      position: 0,
+      courseIds: [],
+    });
+    expect(result).toEqual({ ok: false, message: "That slug is already in use." });
+
+    // Not just the return value — the row itself must be untouched by the rejected write.
+    const [after] = await db.select().from(track).where(eq(track.id, rowB.id));
+    expect(after.slug).toBe(`${P}-slug-b`);
+    expect(after.title).toBe("T");
+  });
+
+  it("reconciles course membership on update by inserting a new course and reordering existing ones", async () => {
+    mockRequireRole.mockResolvedValue(admin);
+
+    await createTrack(input(`${P}-reconcile`, [courseIds[0]]));
+    const [row] = await db.select().from(track).where(eq(track.slug, `${P}-reconcile`));
+
+    // Insert branch: the submitted set grows from [A] to [A, B].
+    await updateTrack(row.id, {
+      slug: `${P}-reconcile`,
+      title: "T",
+      promise: "p",
+      outcome: "o",
+      position: 0,
+      courseIds: [courseIds[0], courseIds[1]],
+    });
+    const afterInsert = await db.select().from(trackCourse).where(eq(trackCourse.trackId, row.id));
+    expect(afterInsert.map((l) => l.courseId).sort()).toEqual([...courseIds].sort());
+
+    // Reorder branch: same membership, order flipped — position values are the thing under test,
+    // not just which courseIds are present.
+    await updateTrack(row.id, {
+      slug: `${P}-reconcile`,
+      title: "T",
+      promise: "p",
+      outcome: "o",
+      position: 0,
+      courseIds: [courseIds[1], courseIds[0]],
+    });
+    const afterReorder = await db.select().from(trackCourse).where(eq(trackCourse.trackId, row.id));
+    const positionByCourse = new Map(afterReorder.map((l) => [l.courseId, l.position]));
+    expect(positionByCourse.get(courseIds[1])).toBe(0);
+    expect(positionByCourse.get(courseIds[0])).toBe(1);
+  });
+
+  it("rejects malformed input before writing anything", async () => {
+    mockRequireRole.mockResolvedValue(admin);
+    const badSlug = `${P} Bad Slug!`;
+    createdSlugs.push(badSlug); // defensive — createTrack should never actually insert this
+
+    const result = await createTrack({ slug: badSlug, title: "T", promise: "p", outcome: "o", position: 0, courseIds: [] });
+    expect(result).toEqual({ ok: false, message: "Use lowercase letters, numbers and hyphens." });
+
+    const rows = await db.select().from(track).where(eq(track.slug, badSlug));
+    expect(rows).toHaveLength(0);
+  });
 });
