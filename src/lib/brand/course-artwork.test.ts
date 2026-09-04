@@ -83,8 +83,11 @@ describe("courseArtwork", () => {
   it("gives a track a different cover from any of its courses", () => {
     // Tracks reuse this generator seeded by the TRACK slug. A track whose art
     // happened to match one of its member courses would read as a duplicate, so
-    // this locks in that the seed space separates them.
-    const trackArt = courseArtwork("freelance-brand-designer", 12);
+    // this locks in that the seed space separates them. Both calls use the SAME
+    // lesson count so band-array length can't carry the assertion — divergence
+    // can only come from the seed-driven hash actually producing different
+    // bands for different slugs.
+    const trackArt = courseArtwork("freelance-brand-designer", 4);
     const courseArt = courseArtwork("brand-identity-essentials", 4);
     expect(trackArt.bands).not.toEqual(courseArt.bands);
   });

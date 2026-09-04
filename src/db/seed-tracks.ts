@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { course, track, trackCourse } from "@/db/schema";
 
@@ -47,11 +47,12 @@ export async function seedTracks(): Promise<{ created: number; skipped: number }
       continue;
     }
 
+    // No `.orderBy` here — real position order comes from `def.courseSlugs` below via
+    // `idBySlug`, not from this query's row order.
     const courses = await db
       .select({ id: course.id, slug: course.slug })
       .from(course)
-      .where(inArray(course.slug, def.courseSlugs))
-      .orderBy(asc(course.slug));
+      .where(inArray(course.slug, def.courseSlugs));
 
     const idBySlug = new Map(courses.map((c) => [c.slug, c.id]));
     const missing = def.courseSlugs.filter((s) => !idBySlug.has(s));
