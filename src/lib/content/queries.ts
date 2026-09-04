@@ -2,6 +2,8 @@ import "server-only";
 import { eq, and, or, ilike, asc, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
+import type { Session } from "@/lib/session";
+import { assertCanManageCourse } from "./mutations";
 import type { CourseDetail, CourseModule, CourseSummary, Lesson, Level } from "./types";
 
 export type LessonRef = { courseSlug: string; slug: string; title: string };
@@ -62,7 +64,7 @@ export async function getAllCourses(): Promise<CourseSummary[]> {
 export async function getLesson(
   courseSlug: string,
   lessonSlug: string,
-  viewer: { userId: string } | null,
+  viewer: Session | null,
 ): Promise<LessonWithNav | null> {
   const detail = await getCourseBySlug(courseSlug);
   if (!detail) return null;
@@ -73,7 +75,9 @@ export async function getLesson(
 
   const target = flat[index];
   const canAccess =
-    target.isPreview || (viewer !== null && (await isEnrolled(detail.id, viewer.userId)));
+    target.isPreview ||
+    (viewer !== null &&
+      ((await isEnrolled(detail.id, viewer.userId)) || (await canManageCourse(detail.id, viewer))));
 
   if (!canAccess) return null;
 
@@ -82,10 +86,37 @@ export async function getLesson(
   return {
     ...target,
     course: summary,
-    modules: detail.modules,
+    // `modules` backs the client-rendered lesson sidebar (title/slug/isPreview only — see
+    // `LessonSidebar`), which never needs any lesson's body text. `canAccess` above only gates the
+    // *target* lesson's own `content`; without stripping it here too, every other lesson's full
+    // content — including non-preview ones the viewer was never checked against — would ride along
+    // in this array and get serialized into the client component's RSC payload regardless.
+    modules: withoutLessonContent(detail.modules),
     prev: index > 0 ? toRef(flat[index - 1]) : null,
     next: index < flat.length - 1 ? toRef(flat[index + 1]) : null,
   };
+}
+
+/**
+ * Wraps `assertCanManageCourse` (Task 9, `./mutations`) as a boolean check: it throws on failure
+ * rather than returning one. Reusing it here (spec §8: "Draft visibility, edit, publish/unpublish,
+ * delete, and lesson access all reuse this same rule") lets an admin or the course's own instructor
+ * open a non-preview lesson for review/authoring without first self-enrolling.
+ */
+async function canManageCourse(courseId: string, viewer: Session): Promise<boolean> {
+  try {
+    await assertCanManageCourse(courseId, viewer);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function withoutLessonContent(modules: CourseModule[]): CourseModule[] {
+  return modules.map((m) => ({
+    ...m,
+    lessons: m.lessons.map((l) => ({ ...l, content: "" })),
+  }));
 }
 
 export async function getCatalogStats(): Promise<{

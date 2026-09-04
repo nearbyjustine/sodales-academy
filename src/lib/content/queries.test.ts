@@ -1,11 +1,29 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, userProfile } from "@/db/schema";
-import { getCourses, getCourseBySlug, getLesson, getCatalogStats } from "./queries";
+import type { Session } from "@/lib/session";
+
+/**
+ * `queries.ts`'s `getLesson` now imports `assertCanManageCourse` from `./mutations` (the
+ * admin/instructor bypass added alongside the enrollment gate), which imports `requireRole` from
+ * `@/lib/session`, which imports the real `@neondatabase/auth@0.5.0-beta` package — that package's
+ * compiled output does a bare `import { cookies, headers } from "next/headers"` that Node's strict
+ * ESM loader can't resolve outside Next's own bundler (same failure `mutations.test.ts` and
+ * `session.test.ts` document and mock around). None of this file's tests call `requireRole` or
+ * exercise auth — they only need the module graph to load — so this is the exact same mitigation,
+ * and it leaves `@/db` real and unmocked, same as every other test in this file.
+ */
+vi.mock("@/lib/auth/server", () => ({ auth: { getSession: vi.fn() } }));
+
+const { getCourses, getCourseBySlug, getLesson, getCatalogStats } = await import("./queries");
 
 const TEST_INSTRUCTOR = "test-instructor-id";
 const TEST_LEARNER = "queries-test-enrolled-learner";
+
+function testViewer(userId: string, role: Session["role"]): Session {
+  return { userId, name: "Test Viewer", email: "viewer@queries-test.example", initials: "TV", role };
+}
 
 beforeAll(async () => {
   await db
@@ -110,26 +128,71 @@ describe("getLesson", () => {
     expect(result!.content).toBe("x".repeat(60));
   });
 
+  it("never leaks other lessons' content through the modules field, regardless of the viewer's access to the target lesson", async () => {
+    // `first-lesson` is a preview, so `canAccess` is true for a null viewer — but that must not
+    // also hand back `second-lesson`'s (non-preview) full content by way of the `modules` array
+    // the client-rendered sidebar receives.
+    const result = await getLesson("queries-test-course", "first-lesson", null);
+    expect(result).not.toBeNull();
+    const flatLessons = result!.modules.flatMap((m) => m.lessons);
+    expect(flatLessons.some((l) => l.slug === "second-lesson")).toBe(true);
+    expect(flatLessons.every((l) => l.isPreview || !l.content)).toBe(true);
+    expect(flatLessons.every((l) => l.content === "")).toBe(true);
+  });
+
   it("returns null for a non-preview lesson with no viewer", async () => {
     const result = await getLesson("queries-test-course", "second-lesson", null);
     expect(result).toBeNull();
   });
 
   it("returns null for a non-preview lesson with an unenrolled viewer", async () => {
-    const result = await getLesson("queries-test-course", "second-lesson", {
-      userId: "queries-test-unenrolled-learner",
-    });
+    const result = await getLesson(
+      "queries-test-course",
+      "second-lesson",
+      testViewer("queries-test-unenrolled-learner", "learner"),
+    );
     expect(result).toBeNull();
   });
 
   it("returns navigation and full content for a non-preview lesson with an enrolled viewer", async () => {
-    const result = await getLesson("queries-test-course", "second-lesson", {
-      userId: TEST_LEARNER,
-    });
+    const result = await getLesson(
+      "queries-test-course",
+      "second-lesson",
+      testViewer(TEST_LEARNER, "learner"),
+    );
     expect(result).not.toBeNull();
     expect(result!.prev!.slug).toBe("first-lesson");
     expect(result!.next).toBeNull();
     expect(result!.content).toBe("y".repeat(60));
+  });
+
+  it("returns full content for a non-preview lesson to an admin who isn't enrolled", async () => {
+    const result = await getLesson(
+      "queries-test-course",
+      "second-lesson",
+      testViewer("queries-test-unenrolled-admin", "admin"),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe("y".repeat(60));
+  });
+
+  it("returns full content for a non-preview lesson to the course's own instructor who isn't enrolled", async () => {
+    const result = await getLesson(
+      "queries-test-course",
+      "second-lesson",
+      testViewer(TEST_INSTRUCTOR, "instructor"),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe("y".repeat(60));
+  });
+
+  it("returns null for a non-preview lesson to an instructor of a different course", async () => {
+    const result = await getLesson(
+      "queries-test-course",
+      "second-lesson",
+      testViewer("queries-test-other-instructor", "instructor"),
+    );
+    expect(result).toBeNull();
   });
 });
 
