@@ -1,7 +1,6 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
-// @ts-expect-error - dotenv is available as a transitive dependency
 import { config } from "dotenv";
 
 // Load .env.local for test environment (DATABASE_URL, etc.)
