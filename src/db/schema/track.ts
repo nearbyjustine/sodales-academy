@@ -38,9 +38,16 @@ export const trackCourse = pgTable(
   },
   // `unique(track_id, course_id)` also serves track_id-alone lookups (track_id is
   // its leading column). The extra index is on (track_id, position) because every
-  // read orders by position within a track.
+  // read orders by position within a track. Neither composite index serves a
+  // course_id-alone lookup, since course_id is not the LEADING column of either
+  // one — Postgres can't use a (track_id, ...) index to satisfy a WHERE on
+  // course_id alone. `getTracksForCourse` filters on course_id alone and runs on
+  // every course/lesson page load, and `course` deletes cascade through this
+  // table, so course_id gets its own single-column index (convention established
+  // by cb3ed20 on main: index every FK column).
   (table) => [
     unique().on(table.trackId, table.courseId),
     index().on(table.trackId, table.position),
+    index().on(table.courseId),
   ],
 );

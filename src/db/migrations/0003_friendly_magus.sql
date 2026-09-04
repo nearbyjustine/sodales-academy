@@ -1,0 +1,1 @@
+CREATE INDEX "track_course_course_id_index" ON "track_course" USING btree ("course_id");
