@@ -7,6 +7,7 @@ const validCourse = {
   description: "A description that is comfortably longer than twenty characters.",
   category: "Freelancing",
   level: "beginner",
+  instructorUserId: "00000000-0000-0000-0000-000000000000",
   modules: [
     {
       title: "Module One",

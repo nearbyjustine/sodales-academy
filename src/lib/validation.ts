@@ -44,6 +44,7 @@ export const courseInputSchema = z
     category: z.enum(COURSE_CATEGORIES),
     level: z.enum(["beginner", "intermediate", "advanced"]),
     modules: z.array(moduleSchema).min(1, "Add at least one module").max(12),
+    instructorUserId: z.string().uuid(),
   })
   .superRefine((course, ctx) => {
     const positions = course.modules.map((m) => m.position);
