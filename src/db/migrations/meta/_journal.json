@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788484649229,
+      "tag": "0000_fixed_lady_mastermind",
+      "breakpoints": true
+    }
+  ]
+}
