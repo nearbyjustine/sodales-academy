@@ -24,11 +24,15 @@ const TRACK_SLUG = `${P}-track`;
 const DRAFT_SLUG = `${P}-draft`;
 const COURSE_A = `${P}-course-a`;
 const COURSE_B = `${P}-course-b`;
+const DRAFT_COURSE = `${P}-draft-course`;
 const LEARNER = `${P}-learner`;
+const ADMIN = `${P}-admin`;
 
 const learner = { userId: LEARNER, name: "L", email: "l@x.test", initials: "L", role: "learner" };
+const admin = { userId: ADMIN, name: "A", email: "a@x.test", initials: "A", role: "admin" };
 
 let courseIds: string[] = [];
+let draftCourseId: string;
 
 beforeAll(async () => {
   const rows = await db.insert(course).values([
@@ -37,21 +41,30 @@ beforeAll(async () => {
   ]).returning();
   courseIds = rows.map((r) => r.id);
 
+  const [draftCourseRow] = await db.insert(course).values({
+    slug: DRAFT_COURSE, title: "DC", description: "d", category: "T", level: "beginner", status: "published", instructorUserId: `${P}-ins`,
+  }).returning();
+  draftCourseId = draftCourseRow.id;
+
   const [t] = await db.insert(track).values({
     slug: TRACK_SLUG, title: "T", promise: "p", outcome: "o", status: "published", position: 0,
   }).returning();
-  await db.insert(track).values({
+  const [d] = await db.insert(track).values({
     slug: DRAFT_SLUG, title: "D", promise: "p", outcome: "o", status: "draft", position: 1,
-  });
+  }).returning();
 
   await db.insert(trackCourse).values(rows.map((r, i) => ({ trackId: t.id, courseId: r.id, position: i })));
+  // `DRAFT_SLUG` needs its own linked course, distinct from `TRACK_SLUG`'s two, so the
+  // draft-status guard in `enrollInTrack` is what rejects it — not the empty-track branch
+  // (`links.length === 0`), which would return a different, unrelated failure message.
+  await db.insert(trackCourse).values({ trackId: d.id, courseId: draftCourseId, position: 0 });
 });
 
 afterAll(async () => {
-  await db.delete(enrollment).where(inArray(enrollment.courseId, courseIds));
+  await db.delete(enrollment).where(inArray(enrollment.courseId, [...courseIds, draftCourseId]));
   await db.delete(track).where(eq(track.slug, TRACK_SLUG));
   await db.delete(track).where(eq(track.slug, DRAFT_SLUG));
-  await db.delete(course).where(inArray(course.id, courseIds));
+  await db.delete(course).where(inArray(course.id, [...courseIds, draftCourseId]));
 });
 
 describe("enrollInTrack", () => {
@@ -93,7 +106,20 @@ describe("enrollInTrack", () => {
     mockRequireUser.mockResolvedValue(learner);
 
     const result = await enrollInTrack(DRAFT_SLUG);
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({ ok: false, message: "That track isn't available yet." });
+  });
+
+  it("lets an admin enrol in a draft track", async () => {
+    mockRequireUser.mockResolvedValue(admin);
+
+    const result = await enrollInTrack(DRAFT_SLUG);
+    expect(result.ok).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(enrollment)
+      .where(and(eq(enrollment.courseId, draftCourseId), eq(enrollment.userId, ADMIN)));
+    expect(rows).toHaveLength(1);
   });
 
   it("rejects an unauthenticated caller", async () => {
