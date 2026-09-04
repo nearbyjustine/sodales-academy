@@ -15,6 +15,13 @@
       "when": 1788538297689,
       "tag": "0001_new_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788555037163,
+      "tag": "0002_certain_puppet_master",
+      "breakpoints": true
     }
   ]
 }

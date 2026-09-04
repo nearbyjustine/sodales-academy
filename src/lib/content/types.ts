@@ -42,3 +42,29 @@ export type CourseDetail = CourseSummary & {
 };
 
 export const LEVELS: Level[] = ["beginner", "intermediate", "advanced"];
+
+export type TrackStatus = "draft" | "published";
+
+export type TrackSummary = {
+  id: string;
+  slug: string;
+  title: string;
+  promise: string;
+  outcome: string;
+  status: TrackStatus;
+  position: number;
+  courseCount: number;
+  /** Total lessons across every course in the track. */
+  lessonCount: number;
+};
+
+/** A course as it appears inside a track: its normal summary, plus position and
+ *  the viewer's completion. `completedLessonCount` is 0 for a signed-out viewer. */
+export type TrackCourse = CourseSummary & {
+  position: number;
+  completedLessonCount: number;
+};
+
+export type TrackDetail = TrackSummary & {
+  courses: TrackCourse[];
+};
