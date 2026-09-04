@@ -55,9 +55,12 @@ describe("TrackMap", () => {
   });
 
   it("claims no progress for someone who has not enrolled", () => {
-    // The unenrolled view must never imply the visitor has done anything.
+    // The unenrolled view must never imply the visitor has done anything —
+    // not in the header, and not on any per-course row either. A narrower
+    // /of 7 lessons/ regex only covers the header total and would still pass
+    // if a per-row "N of M lessons" line leaked through unguarded.
     render(<TrackMap track={track} enrolled={false} />);
-    expect(screen.queryByText(/of 7 lessons/)).toBeNull();
+    expect(screen.queryByText(/\d+ of \d+ lessons/)).toBeNull();
   });
 
   it("offers review rather than continue once the track is finished", () => {
