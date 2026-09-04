@@ -19,8 +19,11 @@ export type TrackProgress = {
 };
 
 /** A course counts only once it has lessons AND all of them are complete. A
- *  lessonless course is not "finished" — there is nothing there to finish. */
-function isComplete(c: TrackCourse): boolean {
+ *  lessonless course is not "finished" — there is nothing there to finish.
+ *  Exported so `TrackMap`'s "Done" badge uses the exact same rule as the
+ *  progress bar above it instead of a hand-copied inline expression that
+ *  could quietly drift from this one. */
+export function isComplete(c: TrackCourse): boolean {
   return c.lessonCount > 0 && c.completedLessonCount >= c.lessonCount;
 }
 

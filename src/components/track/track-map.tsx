@@ -4,7 +4,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { Badge } from "@/components/ui/badge";
 import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
 import { EnrollTrackButton } from "@/components/track/enroll-track-button";
-import { trackProgress } from "@/lib/track-progress";
+import { isComplete, trackProgress } from "@/lib/track-progress";
 import type { TrackDetail } from "@/lib/content/types";
 
 /**
@@ -54,7 +54,7 @@ export function TrackMap({ track, enrolled }: { track: TrackDetail; enrolled: bo
       <ol className="flex flex-col gap-4">
         {ordered.map((c, index) => {
           const isNext = enrolled && progress.nextCourse?.slug === c.slug;
-          const isDone = c.lessonCount > 0 && c.completedLessonCount >= c.lessonCount;
+          const isDone = isComplete(c);
 
           return (
             <li key={c.slug}>
