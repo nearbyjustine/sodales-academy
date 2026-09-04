@@ -100,6 +100,25 @@ describe("track admin mutations", () => {
     expect(after.status).toBe("published");
   });
 
+  it("refuses to publish a track with no linked courses, leaving it draft", async () => {
+    mockRequireRole.mockResolvedValue(admin);
+
+    // trackInputSchema allows an empty courseIds array on purpose (creating a
+    // draft and adding courses later is a legitimate workflow) -- so this
+    // empty-track state is reachable, and publishing it must not succeed.
+    await createTrack(input(`${P}-empty`, []));
+    const [row] = await db.select().from(track).where(eq(track.slug, `${P}-empty`));
+
+    const result = await publishTrack(row.id);
+    expect(result).toEqual({
+      ok: false,
+      message: "Add at least one course before publishing this track.",
+    });
+
+    const [after] = await db.select().from(track).where(eq(track.id, row.id));
+    expect(after.status).toBe("draft");
+  });
+
   it("deleting a track destroys no enrolment or lesson progress", async () => {
     mockRequireRole.mockResolvedValue(admin);
 

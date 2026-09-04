@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, or } from "drizzle-orm";
+import { and, count, eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
@@ -462,6 +462,21 @@ async function setTrackStatus(
 
   const [row] = await db.select({ slug: track.slug }).from(track).where(eq(track.id, trackId));
   if (!row) return { ok: false, message: "Track not found." };
+
+  // trackInputSchema deliberately does NOT require courseIds.min(1) — creating an
+  // empty draft and adding courses afterward is a legitimate admin workflow. But
+  // PUBLISHING a courseless track is not: it would render "0 courses · 0 lessons"
+  // with an enrol button that can only ever return { ok: false }. Guard here,
+  // not on the schema.
+  if (status === "published") {
+    const [{ value: linkedCourseCount }] = await db
+      .select({ value: count() })
+      .from(trackCourse)
+      .where(eq(trackCourse.trackId, trackId));
+    if (linkedCourseCount === 0) {
+      return { ok: false, message: "Add at least one course before publishing this track." };
+    }
+  }
 
   await db.update(track).set({ status, updatedAt: new Date() }).where(eq(track.id, trackId));
 
