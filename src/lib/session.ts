@@ -9,6 +9,8 @@ import { verifyInviteToken, INVITE_TOKEN_COOKIE } from "@/lib/auth/invite";
 
 export type Role = "learner" | "instructor" | "admin";
 
+export const ROLE_COOKIE = "role";
+
 export type Session = {
   userId: string;
   name: string;
