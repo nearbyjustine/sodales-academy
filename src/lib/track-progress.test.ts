@@ -5,7 +5,6 @@ import type { TrackCourse } from "@/lib/content/types";
 function makeCourse(overrides: Partial<TrackCourse> & { slug: string }): TrackCourse {
   return {
     id: overrides.slug,
-    slug: overrides.slug,
     title: overrides.slug,
     description: "",
     category: "Testing",
@@ -79,5 +78,27 @@ describe("trackProgress", () => {
     ]);
 
     expect(result.nextCourse?.slug).toBe("first");
+  });
+
+  it("clamps percent to 100 when completedLessonCount exceeds lessonCount", () => {
+    const result = trackProgress([
+      makeCourse({ slug: "a", lessonCount: 3, completedLessonCount: 99, position: 0 }),
+    ]);
+
+    expect(result.percent).toBe(100);
+    expect(result.completedLessons).toBeLessThanOrEqual(result.totalLessons);
+  });
+
+  it("does not mutate the input array", () => {
+    const courses = [
+      makeCourse({ slug: "second", lessonCount: 2, completedLessonCount: 0, position: 1 }),
+      makeCourse({ slug: "first", lessonCount: 2, completedLessonCount: 0, position: 0 }),
+    ];
+    const originalOrder = courses.map((c) => c.slug);
+
+    trackProgress(courses);
+
+    const newOrder = courses.map((c) => c.slug);
+    expect(newOrder).toEqual(originalOrder);
   });
 });
