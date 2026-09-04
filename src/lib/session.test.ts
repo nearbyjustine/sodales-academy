@@ -78,6 +78,8 @@ describe("getSession", () => {
       initials: "AR",
       role: "instructor",
     });
+    // An established user's request never touches the invite-cookie block at all.
+    expect(mockCookieDelete).not.toHaveBeenCalled();
   });
 
 });
@@ -103,12 +105,48 @@ describe("getSession — first sign-in provisioning", () => {
     expect(mockCookieDelete).toHaveBeenCalledWith("sodales-invite-token");
   });
 
+  it("still returns the provisioned session when cookie deletion throws (render-phase call)", async () => {
+    // `cookies()` is a read-only sealed proxy during render (Server Components can't mutate
+    // cookies outside a Server Action/Route Handler) — `.delete()` throws there. Provisioning
+    // must not fail just because the best-effort cookie cleanup couldn't run.
+    mockGetSession.mockResolvedValue({
+      data: { user: { id: "user-5", name: "Render Phase", email: "render@sodales.app" } },
+    });
+    mockSelect.mockResolvedValue([]);
+    mockCookieGet.mockReturnValue({ value: "valid-token" });
+    mockCookieDelete.mockImplementation(() => {
+      throw new Error("Cookies can only be modified in a Server Action or Route Handler.");
+    });
+
+    const session = await getSession();
+
+    expect(session).toEqual({
+      userId: "user-5",
+      name: "Render Phase",
+      email: "render@sodales.app",
+      initials: "RP",
+      role: "learner",
+    });
+    expect(mockInsert).toHaveBeenCalled();
+  });
+
   it("returns null — no app access — when there's no valid invite token", async () => {
     mockGetSession.mockResolvedValue({
       data: { user: { id: "user-3", name: "Nobody", email: "nobody@sodales.app" } },
     });
     mockSelect.mockResolvedValue([]);
     mockCookieGet.mockReturnValue(undefined); // no invite cookie at all
+
+    expect(await getSession()).toBeNull();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("returns null — no app access — when the invite cookie holds a forged or expired token", async () => {
+    mockGetSession.mockResolvedValue({
+      data: { user: { id: "user-4", name: "Forger", email: "forger@sodales.app" } },
+    });
+    mockSelect.mockResolvedValue([]);
+    mockCookieGet.mockReturnValue({ value: "forged-or-expired-token" });
 
     expect(await getSession()).toBeNull();
     expect(mockInsert).not.toHaveBeenCalled();

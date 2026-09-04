@@ -90,7 +90,18 @@ export async function getSession(): Promise<Session | null> {
     .values({ userId: user.id, name: user.name, role: "learner" })
     .onConflictDoNothing(); // idempotent — a retried request shouldn't insert twice
 
-  store.delete(INVITE_TOKEN_COOKIE);
+  try {
+    store.delete(INVITE_TOKEN_COOKIE);
+  } catch {
+    // `getSession()` is called from Server Components during render (e.g. `SiteHeader`, which is
+    // what a user lands on right after the OAuth redirect to `/dashboard`), and Next.js only
+    // allows cookie mutation inside a Server Action or Route Handler — during render, `cookies()`
+    // returns a read-only sealed proxy and `.delete()` throws. This cleanup is best-effort, not
+    // security-load-bearing: the profile row above is already committed, and once it exists the
+    // `if (profile) return` branch above makes this whole block unreachable, so a stale cookie is
+    // inert. The cookie's own 30-minute `maxAge` (see `verifyInviteToken`'s TTL) expires it on its
+    // own if this delete can't happen here.
+  }
 
   return {
     userId: user.id,
