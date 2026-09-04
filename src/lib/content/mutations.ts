@@ -3,7 +3,7 @@
 import { and, eq, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
+import { course, courseModule, enrollment, lesson, lessonProgress, track, trackCourse, userProfile } from "@/db/schema";
 import { requireRole, requireUser } from "@/lib/session";
 import { courseInputSchema, type CourseInput } from "@/lib/validation";
 import { assertCanManageCourse, canManageCourse } from "./authz";
@@ -303,4 +303,40 @@ export async function toggleLessonComplete(lessonId: string): Promise<ToggleLess
   await db.insert(lessonProgress).values({ lessonId, userId: viewer.userId }).onConflictDoNothing();
   revalidatePath("/dashboard");
   return { ok: true, complete: true };
+}
+
+export async function enrollInTrack(trackSlug: string): Promise<MutationResult> {
+  const viewer = await requireUser();
+
+  const [row] = await db
+    .select({ id: track.id, status: track.status })
+    .from(track)
+    .where(eq(track.slug, trackSlug));
+  if (!row) return { ok: false, message: "Track not found." };
+
+  // A draft track is not for sale. Admins can preview it via `getTrackBySlug`,
+  // but nobody enrols in something that hasn't been released.
+  if (row.status !== "published" && viewer.role !== "admin") {
+    return { ok: false, message: "That track isn't available yet." };
+  }
+
+  const links = await db
+    .select({ courseId: trackCourse.courseId })
+    .from(trackCourse)
+    .where(eq(trackCourse.trackId, row.id));
+
+  if (links.length === 0) return { ok: false, message: "That track has no courses yet." };
+
+  // `neon-http` has no transactions (`db.transaction(...)` throws synchronously),
+  // so this fans out sequentially. The failure mode is mild and self-healing: a
+  // crash mid-loop leaves the learner enrolled in a prefix of the track, and
+  // re-running completes it, because the insert is idempotent.
+  await db
+    .insert(enrollment)
+    .values(links.map((l) => ({ courseId: l.courseId, userId: viewer.userId })))
+    .onConflictDoNothing();
+
+  revalidatePath(`/tracks/${trackSlug}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
 }
