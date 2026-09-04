@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, and, or, ilike, asc, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, asc, inArray, count } from "drizzle-orm";
 import { db } from "@/db";
 import { course, courseModule, enrollment, lesson, lessonProgress, userProfile } from "@/db/schema";
 import type { Session } from "@/lib/session";
@@ -35,8 +35,7 @@ export async function getCourses(
         : and(...conditions),
     );
 
-  const withCounts = await Promise.all(rows.map((r) => toSummaryWithCount(r)));
-  return withCounts;
+  return toSummariesWithCounts(rows);
 }
 
 export async function getCourseBySlug(slug: string): Promise<CourseDetail | null> {
@@ -68,7 +67,7 @@ export async function getAllCourses(viewer: Session): Promise<CourseSummary[]> {
     viewer.role === "admin"
       ? await db.select().from(course)
       : await db.select().from(course).where(eq(course.instructorUserId, viewer.userId));
-  return Promise.all(rows.map((r) => toSummaryWithCount(r)));
+  return toSummariesWithCounts(rows);
 }
 
 export async function getLesson(
@@ -120,11 +119,21 @@ export async function getCatalogStats(): Promise<{
   categories: number;
 }> {
   const published = await db.select().from(course).where(eq(course.status, "published"));
-  const counts = await Promise.all(published.map((c) => countLessons(c.id)));
+  if (published.length === 0) return { courses: 0, lessons: 0, categories: 0 };
+
+  const [{ value: lessonCount }] = await db
+    .select({ value: count() })
+    .from(lesson)
+    .where(
+      inArray(
+        lesson.courseId,
+        published.map((c) => c.id),
+      ),
+    );
 
   return {
     courses: published.length,
-    lessons: counts.reduce((sum, n) => sum + n, 0),
+    lessons: lessonCount,
     categories: new Set(published.map((c) => c.category)).size,
   };
 }
@@ -151,21 +160,34 @@ export async function getCompletedLessonIds(
   return new Set(rows.map((r) => r.lessonId));
 }
 
-async function countLessons(courseId: string): Promise<number> {
-  const rows = await db.select({ id: lesson.id }).from(lesson).where(eq(lesson.courseId, courseId));
-  return rows.length;
-}
+/**
+ * Batched replacement for what used to be one `resolveInstructorName` + one `countLessons` query
+ * PER course row (2N+1 total for N courses). Collapses to 2 queries total regardless of N: one
+ * grouped lesson count across every course id, one instructor-name lookup across every distinct
+ * instructor id — both `inArray`, both independent of `rows.length`.
+ */
+async function toSummariesWithCounts(rows: (typeof course.$inferSelect)[]): Promise<CourseSummary[]> {
+  if (rows.length === 0) return [];
 
-async function resolveInstructorName(instructorUserId: string): Promise<string> {
-  const [profile] = await db
-    .select({ name: userProfile.name })
-    .from(userProfile)
-    .where(eq(userProfile.userId, instructorUserId));
-  return profile?.name ?? "Unknown instructor";
-}
+  const courseIds = rows.map((r) => r.id);
+  const instructorIds = [...new Set(rows.map((r) => r.instructorUserId))];
 
-async function toSummaryWithCount(row: typeof course.$inferSelect): Promise<CourseSummary> {
-  return {
+  const [counts, profiles] = await Promise.all([
+    db
+      .select({ courseId: lesson.courseId, value: count() })
+      .from(lesson)
+      .where(inArray(lesson.courseId, courseIds))
+      .groupBy(lesson.courseId),
+    db
+      .select({ userId: userProfile.userId, name: userProfile.name })
+      .from(userProfile)
+      .where(inArray(userProfile.userId, instructorIds)),
+  ]);
+
+  const lessonCountByCourseId = new Map(counts.map((c) => [c.courseId, c.value]));
+  const nameByInstructorId = new Map(profiles.map((p) => [p.userId, p.name]));
+
+  return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
     title: row.title,
@@ -173,44 +195,42 @@ async function toSummaryWithCount(row: typeof course.$inferSelect): Promise<Cour
     category: row.category,
     level: row.level,
     status: row.status,
-    instructorName: await resolveInstructorName(row.instructorUserId),
-    lessonCount: await countLessons(row.id),
-  };
+    instructorName: nameByInstructorId.get(row.instructorUserId) ?? "Unknown instructor",
+    lessonCount: lessonCountByCourseId.get(row.id) ?? 0,
+  }));
 }
 
 async function toDetail(row: typeof course.$inferSelect): Promise<CourseDetail> {
-  const summary = await toSummaryWithCount(row);
-  const modules = await db
-    .select()
-    .from(courseModule)
-    .where(eq(courseModule.courseId, row.id))
-    .orderBy(asc(courseModule.position));
+  const [[summary], modules, lessons] = await Promise.all([
+    toSummariesWithCounts([row]),
+    db.select().from(courseModule).where(eq(courseModule.courseId, row.id)).orderBy(asc(courseModule.position)),
+    // One query for every lesson in the course instead of one query per module — grouped by
+    // module id in JS below, same N+1 fix as `toSummariesWithCounts` above.
+    db.select().from(lesson).where(eq(lesson.courseId, row.id)).orderBy(asc(lesson.position)),
+  ]);
 
-  const modulesWithLessons: CourseModule[] = await Promise.all(
-    modules.map(async (m) => {
-      const lessons = await db
-        .select()
-        .from(lesson)
-        .where(eq(lesson.moduleId, m.id))
-        .orderBy(asc(lesson.position));
+  const lessonsByModuleId = new Map<string, typeof lessons>();
+  for (const l of lessons) {
+    const bucket = lessonsByModuleId.get(l.moduleId);
+    if (bucket) bucket.push(l);
+    else lessonsByModuleId.set(l.moduleId, [l]);
+  }
 
-      return {
-        id: m.id,
-        title: m.title,
-        position: m.position,
-        lessons: lessons.map((l) => ({
-          id: l.id,
-          courseSlug: row.slug,
-          slug: l.slug,
-          title: l.title,
-          moduleTitle: m.title,
-          position: l.position,
-          isPreview: l.isPreview,
-          content: l.content,
-        })),
-      };
-    }),
-  );
+  const modulesWithLessons: CourseModule[] = modules.map((m) => ({
+    id: m.id,
+    title: m.title,
+    position: m.position,
+    lessons: (lessonsByModuleId.get(m.id) ?? []).map((l) => ({
+      id: l.id,
+      courseSlug: row.slug,
+      slug: l.slug,
+      title: l.title,
+      moduleTitle: m.title,
+      position: l.position,
+      isPreview: l.isPreview,
+      content: l.content,
+    })),
+  }));
 
   return { ...summary, modules: modulesWithLessons };
 }
