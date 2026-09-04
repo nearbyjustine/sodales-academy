@@ -846,7 +846,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetSession = vi.fn();
 vi.mock("@/lib/auth/server", () => ({
-  auth: { api: { getSession: mockGetSession } },
+  auth: { getSession: mockGetSession },
 }));
 
 const mockSelect = vi.fn();
@@ -859,8 +859,6 @@ const redirectMock = vi.fn(() => {
 });
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 
-vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
-
 const { getSession, requireUser, requireRole } = await import("./session");
 
 beforeEach(() => {
@@ -871,13 +869,13 @@ beforeEach(() => {
 
 describe("getSession", () => {
   it("returns null when there is no auth session", async () => {
-    mockGetSession.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ data: { session: null, user: null } });
     expect(await getSession()).toBeNull();
   });
 
   it("joins the user_profile role onto the auth session", async () => {
     mockGetSession.mockResolvedValue({
-      user: { id: "user-1", name: "Alex Rivera", email: "alex@sodales.app" },
+      data: { user: { id: "user-1", name: "Alex Rivera", email: "alex@sodales.app" } },
     });
     mockSelect.mockResolvedValue([{ role: "instructor" }]);
 
@@ -893,7 +891,7 @@ describe("getSession", () => {
 
   it("defaults to learner when no user_profile row exists yet", async () => {
     mockGetSession.mockResolvedValue({
-      user: { id: "user-2", name: "New Person", email: "new@sodales.app" },
+      data: { user: { id: "user-2", name: "New Person", email: "new@sodales.app" } },
     });
     mockSelect.mockResolvedValue([]);
 
@@ -903,7 +901,7 @@ describe("getSession", () => {
 
 describe("requireUser", () => {
   it("redirects to /login when there is no session", async () => {
-    mockGetSession.mockResolvedValue(null);
+    mockGetSession.mockResolvedValue({ data: { session: null, user: null } });
     await expect(requireUser()).rejects.toThrow("NEXT_REDIRECT");
     expect(redirectMock).toHaveBeenCalledWith("/login");
   });
@@ -912,7 +910,7 @@ describe("requireUser", () => {
 describe("requireRole", () => {
   it("redirects when the role is insufficient", async () => {
     mockGetSession.mockResolvedValue({
-      user: { id: "user-1", name: "Alex", email: "alex@sodales.app" },
+      data: { user: { id: "user-1", name: "Alex", email: "alex@sodales.app" } },
     });
     mockSelect.mockResolvedValue([{ role: "learner" }]);
 
@@ -925,7 +923,7 @@ describe("requireRole", () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm vitest run src/lib/session.test.ts`
-Expected: FAIL — the current `session.ts` still reads a role cookie, not `auth.api.getSession`.
+Expected: FAIL — the current `session.ts` still reads a role cookie, not `auth.getSession`.
 
 - [ ] **Step 3: Implement the real session seam**
 
@@ -934,7 +932,6 @@ implementation changes:
 
 ```ts
 import "server-only";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -968,19 +965,19 @@ function initialsFor(name: string): string {
  */
 
 export async function getSession(): Promise<Session | null> {
-  const authSession = await auth.api.getSession({ headers: await headers() });
-  if (!authSession) return null;
+  const { data } = await auth.getSession();
+  if (!data?.user) return null;
 
   const [profile] = await db
     .select({ role: userProfile.role })
     .from(userProfile)
-    .where(eq(userProfile.userId, authSession.user.id));
+    .where(eq(userProfile.userId, data.user.id));
 
   return {
-    userId: authSession.user.id,
-    name: authSession.user.name,
-    email: authSession.user.email,
-    initials: initialsFor(authSession.user.name),
+    userId: data.user.id,
+    name: data.user.name,
+    email: data.user.email,
+    initials: initialsFor(data.user.name),
     role: profile?.role ?? "learner",
   };
 }
@@ -1011,9 +1008,12 @@ export async function getEnrollments(): Promise<Enrollment[]> {
 }
 ```
 
-Verify `auth.api.getSession`'s exact call shape (some Better-Auth-derived APIs want
-`{ headers }`, others a plain `Headers` object, others a Next.js `Request`) against whatever Task
-3's docs-check turned up — don't assume this snippet's shape is correct without checking.
+**Verified real API (found by this task's implementer, from the runtime source at
+`dist/server-b0OzGjXl.mjs`, not just type defs):** it's `auth.getSession()` — no `api` namespace,
+no `headers` argument. The Next.js wrapper reads `cookies()`/`headers()` ambiently itself. It
+returns `{ data, error }`, where `data` is `{ session, user }` on success or
+`{ session: null, user: null }` on failure — **never a bare `null`**. Check `data?.user`, not
+truthiness of `data` itself.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -1693,11 +1693,13 @@ Note honestly: `promoteAdmin`'s real implementation needs to query the Neon Auth
 email (to find `ADMIN_EMAIL`'s user id) before it can promote the right `user_profile` row to
 `admin` — and `resolveInstructorUserId`'s "just take the first `user_profile` row" is only correct
 while there's exactly one user in the database (true immediately after Prerequisites, false once
-more people sign up). Before this task is done, both functions need a real by-email lookup against
-whatever `@neondatabase/auth` exposes for querying its user table server-side (check its exports
-for something like `auth.api.listUsers` or direct access to its Drizzle adapter's user table) —
-finish this using the real API once Task 3's docs-check has identified it, rather than shipping
-the single-user assumption above.
+more people sign up). Tasks 3 and 6 both found `@neondatabase/auth`'s real API has no `.api.`
+namespace at all (it's `auth.getSession()` directly, not `auth.api.getSession(...)`) — so don't
+assume an `auth.api.listUsers`-shaped method exists either. Check the same
+`node_modules/@neondatabase/auth/dist/**/*.d.mts` files Tasks 3/6 read for whatever the real
+user-lookup-by-email method is called (or fall back to querying the `neon_auth` Postgres schema
+directly via Drizzle's raw SQL, since it's a real schema in the same database, per spec §5) —
+finish this using the real API rather than shipping the single-user assumption above.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
