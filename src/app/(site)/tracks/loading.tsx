@@ -6,9 +6,9 @@ export default function Loading() {
       <span className="sr-only">Loading</span>
       <Skeleton className="h-10 w-40" />
       <Skeleton className="mt-4 h-16 w-full max-w-xl" />
-      <div className="mt-10 grid gap-6 md:grid-cols-2">
-        <Skeleton className="h-72" />
-        <Skeleton className="h-72" />
+      <div className="mt-10 flex flex-col gap-6">
+        <Skeleton className="h-56 w-full" />
+        <Skeleton className="h-56 w-full" />
       </div>
     </div>
   );

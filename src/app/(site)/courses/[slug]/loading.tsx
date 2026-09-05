@@ -4,6 +4,7 @@ export default function Loading() {
   return (
     <div aria-busy="true" className="mx-auto max-w-6xl px-4 py-16">
       <span className="sr-only">Loading</span>
+      <Skeleton className="mb-10 h-40 w-full md:h-56" />
       <Skeleton className="h-5 w-24" />
       <Skeleton className="mt-3 h-10 w-2/3" />
       <Skeleton className="mt-3 h-5 w-1/3" />
