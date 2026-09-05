@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,7 @@ export function CourseForm({
   );
   const [slugTouched, setSlugTouched] = useState(Boolean(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pending, startTransition] = useTransition();
 
   function handleTitleChange(title: string) {
     setState((prev) => ({
@@ -71,8 +72,9 @@ export function CourseForm({
     }));
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
 
     const result = courseInputSchema.safeParse(state);
 
@@ -90,17 +92,19 @@ export function CourseForm({
     }
 
     setErrors({});
-    const mutationResult = courseId
-      ? await updateCourse(courseId, result.data)
-      : await createCourse(result.data);
+    startTransition(async () => {
+      const mutationResult = courseId
+        ? await updateCourse(courseId, result.data)
+        : await createCourse(result.data);
 
-    if (!mutationResult.ok) {
-      toast.error(mutationResult.message);
-      return;
-    }
+      if (!mutationResult.ok) {
+        toast.error(mutationResult.message);
+        return;
+      }
 
-    toast.success(courseId ? "Course updated." : "Course created.");
-    router.push("/admin/courses");
+      toast.success(courseId ? "Course updated." : "Course created.");
+      router.push("/admin/courses");
+    });
   }
 
   return (
@@ -249,8 +253,8 @@ export function CourseForm({
         </div>
       </div>
 
-      <Button type="submit" className="self-start">
-        Save course
+      <Button type="submit" className="self-start" disabled={pending}>
+        {pending ? "Saving…" : "Save course"}
       </Button>
     </form>
   );

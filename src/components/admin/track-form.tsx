@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
@@ -66,6 +66,7 @@ export function TrackForm({
   );
   const [slugTouched, setSlugTouched] = useState(Boolean(track));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pending, startTransition] = useTransition();
 
   function handleTitleChange(title: string) {
     setState((prev) => ({
@@ -88,8 +89,9 @@ export function TrackForm({
     setState((prev) => ({ ...prev, courseIds: moveItem(prev.courseIds, index, direction) }));
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
 
     const result = trackInputSchema.safeParse(state);
 
@@ -107,17 +109,19 @@ export function TrackForm({
     }
 
     setErrors({});
-    const mutationResult = track
-      ? await updateTrack(track.id, result.data)
-      : await createTrack(result.data);
+    startTransition(async () => {
+      const mutationResult = track
+        ? await updateTrack(track.id, result.data)
+        : await createTrack(result.data);
 
-    if (!mutationResult.ok) {
-      toast.error(mutationResult.message);
-      return;
-    }
+      if (!mutationResult.ok) {
+        toast.error(mutationResult.message);
+        return;
+      }
 
-    toast.success(track ? "Track updated." : "Track created.");
-    router.push("/admin/tracks");
+      toast.success(track ? "Track updated." : "Track created.");
+      router.push("/admin/tracks");
+    });
   }
 
   const courseById = new Map(courses.map((c) => [c.id, c]));
@@ -289,8 +293,8 @@ export function TrackForm({
         </div>
       </fieldset>
 
-      <Button type="submit" className="self-start">
-        {track ? "Save track" : "Create track"}
+      <Button type="submit" className="self-start" disabled={pending}>
+        {pending ? "Saving…" : track ? "Save track" : "Create track"}
       </Button>
     </form>
   );

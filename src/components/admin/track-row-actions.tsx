@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MoreHorizontalIcon } from "lucide-react";
@@ -34,6 +35,8 @@ export function TrackRowActions({
   status: TrackStatus;
 }) {
   const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePending, startDeleteTransition] = useTransition();
 
   async function handleTogglePublish() {
     const result = status === "published" ? await unpublishTrack(id) : await publishTrack(id);
@@ -47,20 +50,28 @@ export function TrackRowActions({
     router.refresh();
   }
 
-  async function handleDelete() {
-    const result = await deleteTrack(id);
+  function handleDelete() {
+    startDeleteTransition(async () => {
+      const result = await deleteTrack(id);
 
-    if (!result.ok) {
-      toast.error(result.message);
-      return;
-    }
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
 
-    toast.success("Track deleted.");
-    router.refresh();
+      toast.success("Track deleted.");
+      setDeleteOpen(false);
+      router.refresh();
+    });
+  }
+
+  function handleDeleteDialogOpenChange(open: boolean) {
+    if (deletePending && !open) return;
+    setDeleteOpen(open);
   }
 
   return (
-    <Dialog>
+    <Dialog open={deleteOpen} onOpenChange={handleDeleteDialogOpenChange}>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${trackTitle}`} />}
@@ -87,10 +98,12 @@ export function TrackRowActions({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <DialogClose render={<Button variant="destructive" onClick={handleDelete} />}>
-            Delete
+          <DialogClose render={<Button variant="outline" disabled={deletePending} />}>
+            Cancel
           </DialogClose>
+          <Button variant="destructive" disabled={deletePending} onClick={handleDelete}>
+            {deletePending ? "Deleting…" : "Delete"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

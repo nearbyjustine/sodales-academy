@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 
 function GoogleGlyph() {
@@ -32,15 +33,25 @@ export function GoogleButton({
   disabled?: boolean;
   callbackURL?: string;
 }) {
-  async function handleClick() {
-    const { authClient } = await import("@/lib/auth/client");
-    await authClient.signIn.social({ provider: "google", callbackURL });
+  const [pending, startTransition] = useTransition();
+
+  function handleClick() {
+    startTransition(async () => {
+      const { authClient } = await import("@/lib/auth/client");
+      await authClient.signIn.social({ provider: "google", callbackURL });
+    });
   }
 
   return (
-    <Button type="button" variant="outline" className="w-full" disabled={disabled} onClick={handleClick}>
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full"
+      disabled={disabled || pending}
+      onClick={handleClick}
+    >
       <GoogleGlyph />
-      Continue with Google
+      {pending ? "Redirecting…" : "Continue with Google"}
     </Button>
   );
 }
