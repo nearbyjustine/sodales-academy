@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { CourseArtwork } from "@/components/brand/course-artwork";
-import { Badge } from "@/components/ui/badge";
 import type { CourseSummary } from "@/lib/content/types";
 
 export function CourseRow({ course }: { course: CourseSummary }) {
@@ -14,12 +13,10 @@ export function CourseRow({ course }: { course: CourseSummary }) {
       </div>
 
       <div className="flex flex-col gap-2 p-5 sm:pl-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="capitalize">
-            {course.level}
-          </Badge>
-          <span className="label-eyebrow text-graphite">{course.category}</span>
-        </div>
+        <p className="label-eyebrow flex flex-wrap gap-3 text-graphite">
+          <span>{course.level}</span>
+          <span>{course.category}</span>
+        </p>
         <h3 className="text-xl font-bold group-hover/row:text-violet">{course.title}</h3>
         <p className="line-clamp-2 max-w-2xl text-graphite">{course.description}</p>
         <div className="label-eyebrow flex gap-4 text-graphite">

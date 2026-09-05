@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FolderOpenIcon } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button-link";
 import {
   Table,
@@ -28,6 +29,7 @@ export default async function AdminTracksPage() {
 
       {tracks.length === 0 ? (
         <div className="flex flex-col items-center gap-4 py-24 text-center">
+          <FolderOpenIcon aria-hidden="true" className="size-10 text-graphite" />
           <h2 className="text-xl font-bold">No tracks yet</h2>
           <p className="max-w-sm text-graphite">A track is an ordered path through courses.</p>
           <ButtonLink href="/admin/tracks/new">New track</ButtonLink>

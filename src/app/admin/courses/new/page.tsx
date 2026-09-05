@@ -9,5 +9,12 @@ export default async function NewCoursePage() {
   const session = await requireRole("instructor", "admin");
   const instructors = session.role === "admin" ? await listInstructors() : [];
 
-  return <CourseForm heading="New course" viewerRole={session.role} instructors={instructors} />;
+  return (
+    <div className="p-6 lg:p-10">
+      <h1 className="text-3xl font-bold tracking-tight">New course</h1>
+      <div className="mt-8">
+        <CourseForm viewerRole={session.role} instructors={instructors} />
+      </div>
+    </div>
+  );
 }

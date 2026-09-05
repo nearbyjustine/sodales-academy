@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { CourseArtwork } from "@/components/brand/course-artwork";
-import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button-link";
 import { CourseOutline } from "@/components/course/course-outline";
 import { EnrollButton } from "@/components/course/enroll-button";
@@ -70,12 +69,10 @@ export default async function CoursePage({ params }: PageProps) {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" className="capitalize">
-          {course.level}
-        </Badge>
-        <span className="label-eyebrow text-graphite">{course.category}</span>
-      </div>
+      <p className="label-eyebrow flex flex-wrap gap-3 text-graphite">
+        <span>{course.level}</span>
+        <span>{course.category}</span>
+      </p>
 
       <div className="mt-6">
         <TrackBreadcrumb tracks={tracks} />

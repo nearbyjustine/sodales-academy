@@ -11,6 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { getSiteNavLinks } from "@/components/layout/site-nav-links";
 
 export function MobileNav({ showAdmin }: { showAdmin: boolean }) {
   // Controlled so the nav entries can stay plain <Link>s. Wrapping them in
@@ -20,12 +21,7 @@ export function MobileNav({ showAdmin }: { showAdmin: boolean }) {
   // in onClick costs one state hook and keeps the links links.
   const [open, setOpen] = useState(false);
 
-  const links = [
-    { href: "/tracks", label: "Tracks" },
-    { href: "/courses", label: "Courses" },
-    { href: "/dashboard", label: "Dashboard" },
-    ...(showAdmin ? [{ href: "/admin", label: "Admin" }] : []),
-  ];
+  const links = getSiteNavLinks(showAdmin);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

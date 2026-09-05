@@ -45,13 +45,11 @@ function slugify(input: string): string {
 
 export function CourseForm({
   initial,
-  heading,
   courseId,
   viewerRole,
   instructors,
 }: {
   initial?: CourseInput;
-  heading: string;
   courseId?: string;
   viewerRole: Role;
   instructors: { userId: string; name: string }[];
@@ -108,9 +106,7 @@ export function CourseForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold tracking-tight">{heading}</h1>
-
+    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="title">Title</Label>

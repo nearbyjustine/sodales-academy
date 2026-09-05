@@ -2,17 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getSiteNavLinks } from "@/components/layout/site-nav-links";
 import { cn } from "@/lib/utils";
 
 export function MainNav({ showAdmin }: { showAdmin: boolean }) {
   const pathname = usePathname();
 
-  const links = [
-    { href: "/tracks", label: "Tracks" },
-    { href: "/courses", label: "Courses" },
-    { href: "/dashboard", label: "Dashboard" },
-    ...(showAdmin ? [{ href: "/admin", label: "Admin" }] : []),
-  ];
+  const links = getSiteNavLinks(showAdmin);
 
   return (
     <nav aria-label="Main" className="hidden items-center gap-6 md:flex">

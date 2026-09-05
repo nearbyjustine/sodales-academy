@@ -9,6 +9,10 @@ export function CourseOutline({
   modules: CourseModule[];
   courseSlug: string;
 }) {
+  if (modules.length === 0) {
+    return <p className="text-graphite">No modules yet.</p>;
+  }
+
   return (
     <div className="flex flex-col gap-10">
       {modules.map((module, index) => (

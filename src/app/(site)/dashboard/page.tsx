@@ -76,7 +76,7 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6">
             {progressByCourse.map(({ course, completedLessonIds }) => (
               <EnrolledCourseCard
                 key={course.slug}

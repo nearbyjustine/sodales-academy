@@ -57,7 +57,6 @@ describe("CourseForm", () => {
     render(
       <CourseForm
         initial={validCourse}
-        heading="Edit course"
         courseId="course-1"
         viewerRole="admin"
         instructors={[{ userId: validCourse.instructorUserId, name: "Instructor One" }]}
