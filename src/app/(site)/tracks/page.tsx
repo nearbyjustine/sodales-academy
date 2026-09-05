@@ -21,7 +21,7 @@ export default async function TracksPage() {
       {tracks.length === 0 ? (
         <p className="mt-12 text-graphite">No tracks are published yet.</p>
       ) : (
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 flex flex-col gap-6">
           {tracks.map((track) => (
             <TrackRow key={track.slug} track={track} />
           ))}

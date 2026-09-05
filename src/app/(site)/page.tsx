@@ -115,7 +115,10 @@ export default async function Home() {
           <p className="mt-3 max-w-xl text-graphite">
             Each track is an ordered path through several courses. The order is the point.
           </p>
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
+          {/* Full-width rows, not a grid: TrackRow is a horizontal row, and a
+              two-column grid holding one of them reads as a broken layout while
+              the catalog is still small. */}
+          <div className="mt-10 flex flex-col gap-6">
             {tracks.map((track) => (
               <TrackRow key={track.slug} track={track} />
             ))}

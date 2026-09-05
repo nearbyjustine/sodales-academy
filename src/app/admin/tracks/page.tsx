@@ -51,7 +51,7 @@ export default async function AdminTracksPage() {
                   <TableCell className="font-bold">{track.title}</TableCell>
                   <TableCell>
                     {track.status === "published" ? (
-                      <Badge className="bg-emerald-100 text-emerald-800">Published</Badge>
+                      <Badge>Published</Badge>
                     ) : (
                       <Badge variant="secondary">Draft</Badge>
                     )}

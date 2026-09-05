@@ -57,7 +57,7 @@ export default async function AdminCoursesPage() {
                   <TableCell className="font-bold">{course.title}</TableCell>
                   <TableCell>
                     {course.status === "published" ? (
-                      <Badge className="bg-emerald-100 text-emerald-800">Published</Badge>
+                      <Badge>Published</Badge>
                     ) : (
                       <Badge variant="secondary">Draft</Badge>
                     )}
