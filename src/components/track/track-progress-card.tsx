@@ -1,5 +1,5 @@
 import { ButtonLink } from "@/components/ui/button-link";
-import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
+import { Progress } from "@/components/ui/progress";
 import { trackProgress } from "@/lib/track-progress";
 import type { TrackDetail } from "@/lib/content/types";
 
@@ -13,11 +13,7 @@ export function TrackProgressCard({ track }: { track: TrackDetail }) {
         <h3 className="mt-1 text-xl font-bold">{track.title}</h3>
       </div>
 
-      <Progress value={progress.percent}>
-        <ProgressTrack>
-          <ProgressIndicator />
-        </ProgressTrack>
-      </Progress>
+      <Progress value={progress.percent} />
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <span className="label-eyebrow text-graphite">

@@ -12,6 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { courseProgress, type CourseProgress } from "@/lib/lesson-progress";
 import { cn } from "@/lib/utils";
 import type { CourseModule } from "@/lib/content/types";
 
@@ -31,7 +32,8 @@ export function LessonSidebar({
   // completedLessonIds is now a prop, not a hook result
   const completed = new Set(completedLessonIds);
   const lessonIds = modules.flatMap((m) => m.lessons.map((l) => l.id));
-  const progress = summarizeProgress(completed, lessonIds);
+  const doneCount = lessonIds.filter((id) => completed.has(id)).length;
+  const progress = courseProgress(lessonIds.length, doneCount);
 
   return (
     <>
@@ -73,12 +75,6 @@ export function LessonSidebar({
   );
 }
 
-function summarizeProgress(completed: Set<string>, lessonIds: string[]) {
-  const done = lessonIds.filter((id) => completed.has(id)).length;
-  const total = lessonIds.length;
-  return { completed: done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
-}
-
 function SidebarContent({
   modules,
   courseSlug,
@@ -88,14 +84,14 @@ function SidebarContent({
   closeOnNavigate,
 }: Omit<LessonSidebarProps, "completedLessonIds"> & {
   completed: Set<string>;
-  progress: { completed: number; total: number; percent: number };
+  progress: CourseProgress;
   closeOnNavigate?: boolean;
 }) {
   return (
     <div className="w-full lg:w-64">
       <Progress value={progress.percent} className="mb-6 flex-col items-start gap-1.5">
         <span className="label-eyebrow text-graphite">
-          {progress.completed}/{progress.total} complete
+          {progress.completedLessons}/{progress.totalLessons} complete
         </span>
       </Progress>
 

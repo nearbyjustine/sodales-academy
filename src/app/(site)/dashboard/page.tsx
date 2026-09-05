@@ -4,6 +4,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { DashboardStats } from "@/components/course/dashboard-stats";
 import { EnrolledCourseCard } from "@/components/course/enrolled-course-card";
 import { TrackProgressCard } from "@/components/track/track-progress-card";
+import { courseProgress } from "@/lib/lesson-progress";
 import {
   getCompletedLessonIds,
   getCourseBySlug,
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
   );
   const coursesFinished = progressByCourse.filter(({ course, completedLessonIds }) => {
     const total = course.modules.flatMap((m) => m.lessons).length;
-    return total > 0 && completedLessonIds.length === total;
+    return courseProgress(total, completedLessonIds.length).isComplete;
   }).length;
 
   return (
