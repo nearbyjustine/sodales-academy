@@ -76,6 +76,31 @@ const components: Components = {
     const { className, ...rest } = omitNode(props);
     return <a className={cn("text-violet underline underline-offset-2", className)} {...rest} />;
   },
+  table: (props) => {
+    const { className, ...rest } = omitNode(props);
+    return (
+      <div className="mt-4 overflow-x-auto">
+        <table className={cn("w-full border-collapse text-sm", className)} {...rest} />
+      </div>
+    );
+  },
+  thead: (props) => {
+    const { className, ...rest } = omitNode(props);
+    return <thead className={cn("border-b border-border", className)} {...rest} />;
+  },
+  th: (props) => {
+    const { className, ...rest } = omitNode(props);
+    return (
+      <th
+        className={cn("px-3 py-2 text-left font-bold", className)}
+        {...rest}
+      />
+    );
+  },
+  td: (props) => {
+    const { className, ...rest } = omitNode(props);
+    return <td className={cn("border-t border-border px-3 py-2", className)} {...rest} />;
+  },
 };
 
 export function LessonBody({ content }: { content: string }) {

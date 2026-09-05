@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { CourseInput } from "@/lib/validation";
+
+const LessonContentEditor = dynamic(
+  () => import("./lesson-content-editor").then((m) => m.LessonContentEditor),
+  {
+    ssr: false,
+    loading: () => <Textarea disabled className="mt-1.5 min-h-32" aria-hidden="true" />,
+  },
+);
 
 type Modules = CourseInput["modules"];
 type ModuleValue = Modules[number];
@@ -240,19 +249,19 @@ export function ModulesEditor({
                   </label>
 
                   <div className="mt-3">
-                    <Label htmlFor={`${prefix}.content`}>Content (Markdown)</Label>
-                    <Textarea
-                      id={`${prefix}.content`}
-                      className="mt-1.5 min-h-32"
-                      value={lesson.content}
-                      onChange={(e) =>
-                        updateLesson(moduleIndex, lessonIndex, { content: e.target.value })
-                      }
-                      aria-invalid={errors[`${prefix}.content`] ? true : undefined}
-                      aria-describedby={
-                        errors[`${prefix}.content`] ? `${prefix}.content-error` : undefined
-                      }
-                    />
+                    <Label htmlFor={`${prefix}.content`}>Content</Label>
+                    <div className="mt-1.5">
+                      <LessonContentEditor
+                        id={`${prefix}.content`}
+                        value={lesson.content}
+                        onChange={(content) => updateLesson(moduleIndex, lessonIndex, { content })}
+                        ariaLabel={`Lesson ${lessonIndex + 1} content`}
+                        ariaInvalid={Boolean(errors[`${prefix}.content`])}
+                        ariaDescribedBy={
+                          errors[`${prefix}.content`] ? `${prefix}.content-error` : undefined
+                        }
+                      />
+                    </div>
                     {errors[`${prefix}.content`] ? (
                       <p
                         id={`${prefix}.content-error`}
