@@ -215,7 +215,12 @@ export function CourseForm({
             }
           >
             <SelectTrigger id="instructorUserId" className="mt-1.5 w-full">
-              <SelectValue placeholder="Select an instructor" />
+              <SelectValue placeholder="Select an instructor">
+                {(value: string | null) =>
+                  instructors.find((instructor) => instructor.userId === value)?.name ??
+                  "Select an instructor"
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {instructors.map((instructor) => (
