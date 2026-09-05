@@ -194,7 +194,7 @@ export function CourseForm({
             }
           >
             <SelectTrigger id="level" className="mt-1.5 w-full">
-              <SelectValue />
+              <SelectValue className="capitalize" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="beginner">Beginner</SelectItem>
