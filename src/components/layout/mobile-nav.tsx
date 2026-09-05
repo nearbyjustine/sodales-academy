@@ -51,7 +51,7 @@ export function MobileNav({ showAdmin }: { showAdmin: boolean }) {
               key={link.href}
               href={link.href}
               onClick={() => setOpen(false)}
-              className="label-eyebrow text-graphite hover:text-violet"
+              className="label-eyebrow text-graphite outline-none hover:text-violet focus-visible:ring-2 focus-visible:ring-violet"
             >
               {link.label}
             </Link>

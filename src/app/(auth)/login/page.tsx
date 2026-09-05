@@ -16,7 +16,10 @@ export default function LoginPage() {
 
       <p className="text-sm text-graphite">
         New to the Academy?{" "}
-        <Link href="/sign-up" className="text-violet underline underline-offset-2">
+        <Link
+          href="/sign-up"
+          className="text-violet underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-violet"
+        >
           Create an account
         </Link>
       </p>

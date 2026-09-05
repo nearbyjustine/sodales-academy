@@ -41,13 +41,13 @@ export function InviteCodeForm({ onVerified }: { onVerified: () => void }) {
           onChange={(event) => setCode(event.target.value)}
           disabled={verified}
           aria-invalid={error ? true : undefined}
-          aria-describedby="invite-code-help"
+          aria-describedby={error ? "invite-code-error invite-code-help" : "invite-code-help"}
         />
         <p id="invite-code-help" className="text-sm text-graphite">
           Members receive this from their team lead.
         </p>
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p id="invite-code-error" role="alert" className="text-sm text-destructive">
             {error}
           </p>
         ) : null}

@@ -23,7 +23,7 @@ export async function SiteHeader() {
           {session ? (
             <>
               <span
-                aria-hidden="true"
+                aria-label={`Signed in as ${session.name}`}
                 className="label-eyebrow flex size-8 items-center justify-center rounded-md border border-border text-graphite"
               >
                 {session.initials}

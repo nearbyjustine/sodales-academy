@@ -33,7 +33,7 @@ export default async function LessonPage({ params }: PageProps) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
           <Link
             href={`/courses/${courseSlug}`}
-            className="label-eyebrow flex items-center gap-2 text-graphite hover:text-violet"
+            className="label-eyebrow flex items-center gap-2 text-graphite outline-none hover:text-violet focus-visible:ring-2 focus-visible:ring-violet"
           >
             <ArrowLeftIcon aria-hidden="true" className="size-4" />
             {lesson.course.title}

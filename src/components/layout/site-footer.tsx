@@ -19,13 +19,13 @@ export function SiteFooter() {
           <ul className="space-y-2">
             {SIBLING_PRODUCTS.map((product) => (
               <li key={product}>
-                <a
-                  href="#"
+                <span
                   title={`Sodales ${product} is not yet live`}
-                  className="text-sm text-violet-accessible hover:underline"
+                  className="text-sm text-violet-accessible"
                 >
                   {product}
-                </a>
+                  <span className="sr-only"> (coming soon)</span>
+                </span>
               </li>
             ))}
           </ul>

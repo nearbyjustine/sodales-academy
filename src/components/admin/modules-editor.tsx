@@ -110,6 +110,11 @@ export function ModulesEditor({
                 value={mod.title}
                 onChange={(e) => updateModule(moduleIndex, { title: e.target.value })}
                 aria-invalid={errors[`modules.${moduleIndex}.title`] ? true : undefined}
+                aria-describedby={
+                  errors[`modules.${moduleIndex}.title`]
+                    ? `modules.${moduleIndex}.title-error`
+                    : undefined
+                }
               />
             </div>
             <Button
@@ -143,7 +148,11 @@ export function ModulesEditor({
             </Button>
           </div>
           {errors[`modules.${moduleIndex}.title`] ? (
-            <p role="alert" className="mt-1 text-sm text-destructive">
+            <p
+              id={`modules.${moduleIndex}.title-error`}
+              role="alert"
+              className="mt-1 text-sm text-destructive"
+            >
               {errors[`modules.${moduleIndex}.title`]}
             </p>
           ) : null}
@@ -180,9 +189,16 @@ export function ModulesEditor({
                           updateLesson(moduleIndex, lessonIndex, { title: e.target.value })
                         }
                         aria-invalid={errors[`${prefix}.title`] ? true : undefined}
+                        aria-describedby={
+                          errors[`${prefix}.title`] ? `${prefix}.title-error` : undefined
+                        }
                       />
                       {errors[`${prefix}.title`] ? (
-                        <p role="alert" className="mt-1 text-sm text-destructive">
+                        <p
+                          id={`${prefix}.title-error`}
+                          role="alert"
+                          className="mt-1 text-sm text-destructive"
+                        >
                           {errors[`${prefix}.title`]}
                         </p>
                       ) : null}
@@ -197,9 +213,16 @@ export function ModulesEditor({
                           updateLesson(moduleIndex, lessonIndex, { slug: e.target.value })
                         }
                         aria-invalid={errors[`${prefix}.slug`] ? true : undefined}
+                        aria-describedby={
+                          errors[`${prefix}.slug`] ? `${prefix}.slug-error` : undefined
+                        }
                       />
                       {errors[`${prefix}.slug`] ? (
-                        <p role="alert" className="mt-1 text-sm text-destructive">
+                        <p
+                          id={`${prefix}.slug-error`}
+                          role="alert"
+                          className="mt-1 text-sm text-destructive"
+                        >
                           {errors[`${prefix}.slug`]}
                         </p>
                       ) : null}
@@ -226,9 +249,16 @@ export function ModulesEditor({
                         updateLesson(moduleIndex, lessonIndex, { content: e.target.value })
                       }
                       aria-invalid={errors[`${prefix}.content`] ? true : undefined}
+                      aria-describedby={
+                        errors[`${prefix}.content`] ? `${prefix}.content-error` : undefined
+                      }
                     />
                     {errors[`${prefix}.content`] ? (
-                      <p role="alert" className="mt-1 text-sm text-destructive">
+                      <p
+                        id={`${prefix}.content-error`}
+                        role="alert"
+                        className="mt-1 text-sm text-destructive"
+                      >
                         {errors[`${prefix}.content`]}
                       </p>
                     ) : null}

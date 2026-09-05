@@ -56,7 +56,7 @@ export function CatalogFilters() {
               aria-pressed={isActive}
               onClick={() => pushParams({ level: option.value === "all" ? undefined : option.value })}
               className={cn(
-                "label-eyebrow shrink-0 rounded-full border px-3 py-1.5 transition-colors",
+                "label-eyebrow shrink-0 rounded-full border px-3 py-1.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-violet",
                 isActive
                   ? "border-violet bg-violet text-primary-foreground"
                   : "border-border text-graphite hover:border-violet hover:text-violet",

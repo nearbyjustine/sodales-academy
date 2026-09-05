@@ -34,7 +34,10 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
       </aside>
 
       <div className="flex items-center justify-between gap-4 border-b border-border p-4 lg:hidden">
-        <Link href="/admin">
+        <Link
+          href="/admin"
+          className="outline-none focus-visible:ring-2 focus-visible:ring-violet"
+        >
           <BrandWordmark product="Academy" />
         </Link>
         <AdminMobileNav role={session.role} />
