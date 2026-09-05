@@ -2,6 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* This app is light-only: every token in `@theme` below is a light value and
+   there is no dark palette anywhere. The shadcn primitives nevertheless ship
+   `dark:` variants, and Tailwind binds `dark:` to `prefers-color-scheme` by
+   default — so on any machine set to dark mode those variants fired against
+   light tokens. `dark:bg-input/30` turned every input and textarea into a
+   filled grey box that reads as disabled, on the sign-in form as much as in
+   admin. Binding the variant to an explicit `.dark` ancestor, which nothing in
+   this app ever sets, makes `dark:` inert until a real dark theme exists. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-obsidian: #111111;
   --color-ivory: #f4f2ed;
@@ -29,7 +39,12 @@
   --color-accent-foreground: var(--color-deep-ink);
   --color-destructive: var(--color-deep-ink);
   --color-border: color-mix(in srgb, var(--color-graphite) 20%, transparent);
-  --color-input: var(--color-border);
+  /* Form controls carry their own, stronger edge. Aliased to --color-border
+     they inherited a 20% graphite hairline, which against the input's faint
+     fill made every editable field read as a disabled one — the admin forms
+     looked greyed out. A control the user can type into has to look different
+     from a decorative card border. */
+  --color-input: color-mix(in srgb, var(--color-graphite) 45%, transparent);
   --color-primary: var(--color-violet);
   --color-primary-foreground: var(--color-ivory);
   --color-ring: var(--color-violet);
@@ -37,11 +52,23 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
+:root {
+  /* Tell the browser this page is light so the surfaces we don't draw —
+     scrollbars, the caret, form-control internals, autofill — stop being
+     rendered dark on top of a light palette. */
+  color-scheme: light;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   font-size: 1rem;
+}
+
+::selection {
+  background: var(--color-violet);
+  color: var(--color-ivory);
 }
 
 .label-eyebrow {
